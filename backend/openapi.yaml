@@ -1,0 +1,173 @@
+openapi: 3.0.3
+info:
+  title: Travel Assistant API
+  version: 1.0.0
+  description: API per l'assistente virtuale di viaggi personalizzati.
+servers:
+  - url: http://localhost:4000/api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      security: []
+      summary: Registra un nuovo utente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+                name: { type: string }
+      responses:
+        '201': { description: Utente creato, ritorna token JWT }
+        '409': { description: Email già registrata }
+
+  /auth/login:
+    post:
+      security: []
+      summary: Login utente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Login riuscito, ritorna token JWT }
+        '401': { description: Credenziali non valide }
+
+  /chat/conversations:
+    post:
+      summary: Crea una nuova conversazione
+      responses:
+        '201': { description: Conversazione creata }
+
+  /chat/conversations/{id}/messages:
+    post:
+      summary: Invia un messaggio nella conversazione (raccolta requisiti / generazione itinerario)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string }
+      responses:
+        '200': { description: Risposta dell'assistente, eventualmente con itinerario proposto }
+        '404': { description: Conversazione non trovata }
+
+  /itineraries:
+    post:
+      summary: Salva come draft l'opzione scelta (primary|alternative) di una conversazione
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversationId, choice]
+              properties:
+                conversationId: { type: string }
+                choice: { type: string, enum: [primary, alternative] }
+      responses:
+        '201': { description: Itinerario draft creato }
+        '400': { description: Nessuna opzione valida da salvare }
+
+  /itineraries/{id}:
+    get:
+      summary: Recupera un itinerario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Itinerario trovato }
+        '404': { description: Itinerario non trovato }
+
+  /bookings:
+    post:
+      summary: Conferma la prenotazione di un itinerario (idempotente)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itineraryId, idempotencyKey, confirm]
+              properties:
+                itineraryId: { type: string }
+                idempotencyKey: { type: string, description: 'UUID generato lato client per prevenire duplicati' }
+                confirm: { type: boolean, description: 'Deve essere true: conferma esplicita richiesta' }
+      responses:
+        '201': { description: Prenotazione creata }
+        '200': { description: Prenotazione già processata (idempotenza) }
+        '409': { description: Prenotazione fallita per indisponibilità sopravvenuta }
+    get:
+      summary: Lista prenotazioni dell'utente autenticato
+      responses:
+        '200': { description: Elenco prenotazioni }
+  /bookings/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      summary: Cancella una prenotazione confermata e ripristina le disponibilità
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Prenotazione cancellata }
+        '404': { description: Prenotazione non trovata o non appartenente all'utente }
+        '409': { description: Stato non cancellabile o conflitto transazionale }
+    patch:
+      summary: Sostituisce il booking con un nuovo itinerario draft dell'utente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newItineraryId]
+              properties:
+                newItineraryId: { type: string }
+      responses:
+        '200': { description: Prenotazione modificata }
+        '404': { description: Prenotazione o nuovo itinerario non trovato }
+        '409': { description: Regola di modifica non rispettata o disponibilità insufficiente }

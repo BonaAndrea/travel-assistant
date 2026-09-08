@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel Assistant - Chat</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav>
+    <a href="chat.html">Chat</a>
+    <a href="dashboard.html">Le mie prenotazioni</a>
+    <a href="#" id="logout-link">Esci</a>
+  </nav>
+  <h1>Assistente di viaggio</h1>
+
+  <div class="card">
+    <div id="chat-log" class="chat-log"></div>
+    <p id="chat-error" class="error"></p>
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <input id="chat-input" placeholder="Scrivi un messaggio..." />
+      <button id="send-btn" style="width:auto;">Invia</button>
+    </div>
+  </div>
+
+  <div id="itinerary-container"></div>
+
+  <script type="module">
+    import { api, requireLogin, logout } from './api.js';
+    requireLogin();
+    document.getElementById('logout-link').addEventListener('click', logout);
+
+    let conversationId = null;
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    function renderMarkdown(text) {
+      let escaped = escapeHtml(text || '');
+
+      // Supporto per tabelle Markdown
+      const lines = escaped.split('\n');
+      const output = [];
+      let inTable = false;
+      let tableRows = [];
+
+      function flushTable() {
+        if (tableRows.length >= 2) {
+          let html = '<table class="chat-table"><thead><tr>';
+          for (const h of tableRows[0]) html += `<th>${h}</th>`;
+          html += '</tr></thead><tbody>';
+          for (let i = 1; i < tableRows.length; i++) {
+            html += '<tr>';
+            for (const c of tableRows[i]) html += `<td>${c}</td>`;
+            html += '</tr>';
+          }
+          html += '</tbody></table>';
+          output.push(html);
+        } else if (tableRows.length === 1) {
+          output.push('| ' + tableRows[0].join(' | ') + ' |');
+        }
+        tableRows = [];
+        inTable = false;
+      }
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+          inTable = true;
+          if (/^\|[\s\-:|]+\|$/.test(trimmed)) continue; // separatore |---|---|
+          const cells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+          tableRows.push(cells);
+        } else {
+          if (inTable) flushTable();
+          output.push(line);
+        }
+      }
+      if (inTable) flushTable();
+
+      let res = output.join('\n');
+      // **grassetto**
+      res = res.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      // *corsivo*
+      res = res.replace(/(^|[^\*])\*(?!\*)(.+?)\*(?!\*)/g, '$1<em>$2</em>');
+      return res;
+    }
+
+    function appendMessage(role, text) {
+      const log = document.getElementById('chat-log');
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.innerHTML = renderMarkdown(text);
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function init() {
+      const { conversationId: id } = await api('/chat/conversations', { method: 'POST' });
+      conversationId = id;
+      appendMessage('assistant', 'Ciao! Dimmi tutto sul viaggio che hai in mente: destinazione, budget, quando partiresti, con chi e cosa ti piace fare.');
+    }
+
+    function renderItinerary(result) {
+      const container = document.getElementById('itinerary-container');
+      container.innerHTML = '';
+      if (!result) return;
+
+      if (result.error) {
+        container.innerHTML = `<div class="card error">${result.error}</div>`;
+        return;
+      }
+
+      const options = [];
+      if (result.primary && result.primary.status === 'ok') {
+        options.push({ data: result.primary, choice: 'primary', isAlternative: false });
+      }
+      if (result.alternative && result.alternative.status === 'ok') {
+        options.push({ data: result.alternative, choice: 'alternative', isAlternative: true });
+      }
+
+      if (options.length === 0) {
+        container.innerHTML = `<div class="card error">Nessuna opzione disponibile con questi criteri.</div>`;
+        return;
+      }
+
+      options.forEach(({ data: option, choice, isAlternative }) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const budgetBadge = option.withinBudget
+          ? '<span class="badge confirmed">Entro il budget</span>'
+          : '<span class="badge pending">Fuori budget</span>';
+
+        card.innerHTML = `
+          <h2>${isAlternative ? '💡 Itinerario alternativo (con compromessi)' : '✨ Itinerario proposto'} ${budgetBadge}</h2>
+          ${isAlternative && option.compromises && option.compromises.length ? `<p><strong>Compromessi applicati:</strong> ${option.compromises.join(' ')}</p>` : ''}
+          <p><strong>✈️ Volo andata:</strong> ${option.flights.outbound.originAirport.iataCode} → ${option.flights.outbound.destinationAirport.iataCode}, ${new Date(option.flights.outbound.date).toLocaleDateString('it-IT')}</p>
+          <p><strong>✈️ Volo ritorno:</strong> ${option.flights.inbound.originAirport.iataCode} → ${option.flights.inbound.destinationAirport.iataCode}, ${new Date(option.flights.inbound.date).toLocaleDateString('it-IT')}</p>
+          <p><strong>🏨 Hotel:</strong> ${option.hotel.hotel.name} (${option.hotel.nights.length} notti)</p>
+          <p><strong>🎟️ Attività (${option.activities.length}):</strong></p>
+          <ul>${option.activities.map(a => `<li>Giorno ${a.day} (${a.date}): ${a.name} - ${a.cost.toFixed(2)}€</li>`).join('')}</ul>
+          <p><strong>Costo totale: ${option.totalCost.toFixed(2)}€</strong> <small style="color:#666;">(voli: ${option.breakdown.flightCost.toFixed(2)}€, hotel: ${option.breakdown.hotelCost.toFixed(2)}€, attività: ${option.breakdown.activityCost.toFixed(2)}€)</small></p>
+          <button class="book-btn" data-choice="${choice}">Prenota ${isAlternative ? 'l\'alternativa' : 'questa proposta'}</button>
+          <p class="book-status"></p>
+        `;
+        container.appendChild(card);
+
+        const btn = card.querySelector('.book-btn');
+        const statusEl = card.querySelector('.book-status');
+
+        btn.addEventListener('click', async () => {
+          if (!confirm(`Confermi la prenotazione dell'itinerario (${choice})?`)) return;
+          btn.disabled = true;
+          statusEl.innerHTML = 'Elaborazione prenotazione transazionale in corso...';
+          try {
+            const itinerary = await api('/itineraries', { method: 'POST', body: { conversationId, choice } });
+            const idempotencyKey = crypto.randomUUID();
+            const { booking } = await api('/bookings', {
+              method: 'POST',
+              body: { itineraryId: itinerary.id, idempotencyKey, confirm: true },
+            });
+            statusEl.innerHTML =
+              booking.status === 'confirmed'
+                ? `<span class="badge confirmed">Prenotazione confermata ✅</span> <a href="dashboard.html" style="margin-left:8px;">Vedi in Dashboard</a>`
+                : `<span class="badge failed">Prenotazione non andata a buon fine: ${booking.failureReason || ''}</span>`;
+          } catch (err) {
+            statusEl.innerHTML = `<span class="error">${err.message}</span>`;
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function send() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      appendMessage('user', text);
+      input.value = '';
+      document.getElementById('chat-error').textContent = '';
+      try {
+        const data = await api(`/chat/conversations/${conversationId}/messages`, { method: 'POST', body: { message: text } });
+        appendMessage('assistant', data.reply);
+        if (data.itinerary) renderItinerary(data.itinerary);
+      } catch (err) {
+        document.getElementById('chat-error').textContent = err.message;
+      }
+    }
+
+    document.getElementById('send-btn').addEventListener('click', send);
+    document.getElementById('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+
+    init();
+  </script>
+</body>
+</html>

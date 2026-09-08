@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel Assistant - Accedi</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>✈️ Travel Assistant</h1>
+
+  <div class="card">
+    <h2>Accedi</h2>
+    <input id="login-email" placeholder="Email" type="email" />
+    <input id="login-password" placeholder="Password" type="password" />
+    <button id="login-btn">Accedi</button>
+    <p id="login-error" class="error"></p>
+  </div>
+
+  <div class="card">
+    <h2>Registrati</h2>
+    <input id="reg-name" placeholder="Nome" />
+    <input id="reg-email" placeholder="Email" type="email" />
+    <input id="reg-password" placeholder="Password (min 6 caratteri)" type="password" />
+    <button id="reg-btn">Registrati</button>
+    <p id="reg-error" class="error"></p>
+  </div>
+
+  <script type="module">
+    import { api } from './api.js';
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      try {
+        const { token } = await api('/auth/login', { method: 'POST', body: { email, password } });
+        localStorage.setItem('token', token);
+        window.location.href = 'chat.html';
+      } catch (err) {
+        document.getElementById('login-error').textContent = err.message;
+      }
+    });
+
+    document.getElementById('reg-btn').addEventListener('click', async () => {
+      const name = document.getElementById('reg-name').value;
+      const email = document.getElementById('reg-email').value;
+      const password = document.getElementById('reg-password').value;
+      try {
+        const { token } = await api('/auth/register', { method: 'POST', body: { name, email, password } });
+        localStorage.setItem('token', token);
+        window.location.href = 'chat.html';
+      } catch (err) {
+        document.getElementById('reg-error').textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

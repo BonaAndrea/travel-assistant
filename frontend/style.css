@@ -1,0 +1,82 @@
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #f7f7f9;
+  color: #1a1a1a;
+}
+h1 { font-size: 1.4rem; }
+nav { margin-bottom: 20px; }
+nav a { margin-right: 12px; text-decoration: none; color: #2952e3; }
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+input, select, button, textarea {
+  font-size: 1rem;
+  padding: 8px;
+  margin: 4px 0;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+button {
+  background: #2952e3;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  width: auto;
+  padding: 8px 16px;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary { background: #e0e0e0; color: #222; }
+
+.chat-log { height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.msg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  max-width: 85%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.msg.user { align-self: flex-end; background: #2952e3; color: #fff; }
+.msg.assistant { align-self: flex-start; background: #eee; }
+
+.error { color: #c0392b; font-size: 0.9rem; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+.badge.confirmed { background: #d4f4dd; color: #1a7a3c; }
+.badge.pending { background: #fff3cd; color: #8a6d00; }
+.badge.failed, .badge.partial_failed { background: #fde2e1; color: #b02a20; }
+.badge.cancelled { background: #e5e7eb; color: #4b5563; }
+
+.chat-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 0.88rem;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.chat-table th, .chat-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  text-align: left;
+}
+.chat-table th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 600;
+}
+.chat-table tr:nth-child(even) {
+  background: #f8fafc;
+}

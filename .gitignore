@@ -1,0 +1,23 @@
+# AgentsRoom and local agent configuration
+.agents/
+.agentsroom/
+.claude/
+.mcp.json
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+.next/
+backend/src/db/vector-index.json
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Operating-system files
+.DS_Store
+Thumbs.db

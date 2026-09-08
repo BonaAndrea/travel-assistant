@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Travel Assistant - Le mie prenotazioni</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav>
+    <a href="chat.html">Chat</a>
+    <a href="dashboard.html">Le mie prenotazioni</a>
+    <a href="#" id="logout-link">Esci</a>
+  </nav>
+  <h1>Le mie prenotazioni</h1>
+  <div id="loading">Caricamento...</div>
+  <div id="bookings"></div>
+
+  <script type="module">
+    import { api, requireLogin, logout } from './api.js';
+    requireLogin();
+    document.getElementById('logout-link').addEventListener('click', logout);
+
+    async function load() {
+      const container = document.getElementById('bookings');
+      try {
+        const bookings = await api('/bookings');
+        document.getElementById('loading').remove();
+        if (bookings.length === 0) {
+          container.innerHTML = '<p>Nessuna prenotazione ancora. Vai in chat per crearne una!</p>';
+          return;
+        }
+        container.innerHTML = bookings.map(b => {
+          const it = b.itinerary;
+          const det = it?.details;
+          return `
+          <div class="card">
+            <p>
+              <span class="badge ${b.status}">${b.status === 'confirmed' ? 'Confermata ✅' : b.status}</span>
+              <small style="color:#666; margin-left: 8px;">Prenotazione ID: ${b.id.slice(0, 8)}...</small>
+            </p>
+            <p><strong>Costo Totale:</strong> ${it.totalCost.toFixed(2)}€ <small style="color:#555;">(Voli: ${it.flightCost.toFixed(2)}€, Hotel: ${it.hotelCost.toFixed(2)}€, Attività: ${it.activityCost.toFixed(2)}€)</small></p>
+            ${det?.flights ? `
+              <p><strong>✈️ Voli:</strong><br/>
+              • Andata: ${det.flights.outbound.originAirport.iataCode} → ${det.flights.outbound.destinationAirport.iataCode} (${new Date(det.flights.outbound.date).toLocaleDateString('it-IT')})<br/>
+              • Ritorno: ${det.flights.inbound.originAirport.iataCode} → ${det.flights.inbound.destinationAirport.iataCode} (${new Date(det.flights.inbound.date).toLocaleDateString('it-IT')})
+              </p>
+            ` : ''}
+            ${det?.hotel ? `
+              <p><strong>🏨 Hotel:</strong> ${det.hotel.name} (${det.hotel.nights.length} notti)</p>
+            ` : ''}
+            ${det?.activities && det.activities.length ? `
+              <p><strong>🎟️ Attività (${det.activities.length}):</strong><br/>
+              ${det.activities.map(a => `• Giorno ${a.day}: ${a.name} (${a.cost.toFixed(2)}€)`).join('<br/>')}
+              </p>
+            ` : ''}
+            <p><small style="color:#777;">Data creazione: ${new Date(b.createdAt).toLocaleString('it-IT')}</small></p>
+            ${b.failureReason ? `<p class="error">Motivo fallimento: ${b.failureReason}</p>` : ''}
+            ${b.status === 'confirmed' ? `
+              <button data-action="cancel" data-id="${b.id}" class="secondary">Cancella prenotazione</button>
+              <button data-action="modify" data-id="${b.id}" class="secondary">Modifica itinerario</button>
+            ` : ''}
+            ${b.status === 'cancelled' && b.cancellationReason ? `<p><small>Motivo cancellazione: ${b.cancellationReason}</small></p>` : ''}
+          </div>
+        `;
+        }).join('');
+        container.querySelectorAll('[data-action="cancel"]').forEach(button => {
+          button.addEventListener('click', async () => {
+            if (!window.confirm('Cancellare la prenotazione e liberare le disponibilità?')) return;
+            button.disabled = true;
+            try {
+              await api(`/bookings/${button.dataset.id}`, { method: 'DELETE' });
+              await load();
+            } catch (err) {
+              window.alert(err.message);
+              button.disabled = false;
+            }
+          });
+        });
+        container.querySelectorAll('[data-action="modify"]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const newItineraryId = window.prompt('Inserisci l\'ID del nuovo itinerario draft:');
+            if (!newItineraryId) return;
+            button.disabled = true;
+            try {
+              await api(`/bookings/${button.dataset.id}`, {
+                method: 'PATCH',
+                body: { newItineraryId },
+              });
+              await load();
+            } catch (err) {
+              window.alert(err.message);
+              button.disabled = false;
+            }
+          });
+        });
+      } catch (err) {
+        document.getElementById('loading').textContent = `Errore: ${err.message}`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
