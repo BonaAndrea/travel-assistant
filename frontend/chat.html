@@ -2,39 +2,647 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Assistant - Chat</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="chat-page">
   <nav>
-    <a href="chat.html">Chat</a>
+    <a class="brand-lockup" href="chat.html" aria-label="Travel Assistant home"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c9.94 0 18 8.06 18 18S33.94 40 24 40 6 31.94 6 22 14.06 4 24 4Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m16 29 5-14 4 7 8-3-5 6-8 2-4 2Z" fill="currentColor"/></svg><span>Travel Assistant<small>Viaggia con intenzione</small></span></a>
+    <a href="chat.html" aria-current="page">Chat</a>
+    <a href="history.html">Storico</a>
     <a href="dashboard.html">Le mie prenotazioni</a>
+    <label class="extras-switch" for="voice-toggle"><span>Extra</span><input id="voice-toggle" type="checkbox" role="switch" aria-label="Attiva funzioni extra" /><span class="extras-switch-track" aria-hidden="true"><span></span></span></label>
     <a href="#" id="logout-link">Esci</a>
   </nav>
-  <h1>Assistente di viaggio</h1>
+  <main>
+  <p class="page-kicker">Il tuo spazio di viaggio</p>
+  <h1>Costruiamo il prossimo viaggio.</h1>
+  <p class="page-intro">Raccontami dove vuoi andare, cosa vuoi sentire e quali vincoli devo rispettare. Ti proporrò un itinerario leggibile, con costi e alternative chiare.</p>
 
-  <div class="card">
-    <div id="chat-log" class="chat-log"></div>
-    <p id="chat-error" class="error"></p>
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <input id="chat-input" placeholder="Scrivi un messaggio..." />
-      <button id="send-btn" style="width:auto;">Invia</button>
+  <ol class="demo-journey" aria-label="Percorso per creare un viaggio">
+    <li class="is-current" aria-current="step"><span>01</span><strong>Racconta</strong><small>Requisiti</small></li>
+    <li><span>02</span><strong>Conferma</strong><small>Preferenze</small></li>
+    <li><span>03</span><strong>Scopri</strong><small>Itinerari</small></li>
+    <li><span>04</span><strong>Prenota</strong><small>Dashboard</small></li>
+  </ol>
+
+  <div class="card chat-shell">
+    <div class="chat-header">
+      <div>
+        <span class="chat-header-kicker">Conversazione attiva</span>
+        <h2>Parliamo del tuo viaggio</h2>
+      </div>
+      <button id="new-chat-btn" class="new-chat-button" type="button">Nuova chat</button>
     </div>
+    <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+    <aside id="chat-overlap-warning" class="chat-overlap-warning" role="status" aria-live="polite" hidden>
+      <div class="chat-overlap-copy">
+        <strong>Attenzione: date già occupate</strong>
+        <p class="chat-overlap-details"></p>
+      </div>
+      <div class="chat-overlap-actions">
+        <button id="chat-overlap-edit" class="secondary" type="button">Modifica date</button>
+        <button id="chat-overlap-continue" class="ghost" type="button">Continua comunque</button>
+      </div>
+    </aside>
+    <div id="chat-error" class="feedback error" role="alert" aria-live="assertive" hidden>
+      <span class="feedback-message"></span>
+      <button id="chat-retry-btn" class="secondary" type="button" hidden>Riprova</button>
+      <div id="chat-cooldown" class="cooldown" hidden>
+        <progress id="chat-cooldown-progress" max="100" value="0"></progress>
+        <span id="chat-cooldown-label">Riprova tra 0 secondi</span>
+      </div>
+    </div>
+    <div class="chat-composer">
+      <label class="image-attach-button" for="preference-images" title="Allega immagini">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.5 6.5-7.8 7.8a3 3 0 0 0 4.2 4.2l7-7a4.5 4.5 0 0 0-6.4-6.4l-7.1 7.1a6 6 0 0 0 8.5 8.5l6.4-6.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+        <span class="sr-only">Allega immagini</span>
+      </label>
+      <input id="preference-images" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled aria-describedby="image-preferences-help image-preferences-status" />
+      <input id="chat-input" placeholder="Es. Un weekend in Portogallo a maggio..." aria-label="Messaggio per l’assistente" />
+      <button id="voice-record-btn" class="voice-record-button" type="button" hidden aria-label="Avvia dettatura vocale" aria-pressed="false" title="Avvia dettatura vocale">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/></svg>
+        <span class="sr-only">Avvia dettatura vocale</span>
+      </button>
+      <button id="send-btn">Invia</button>
+    </div>
+    <p id="voice-status" class="voice-status" role="status" aria-live="polite" hidden>Spente</p>
+    <p id="chat-send-status" class="composer-status" role="status" aria-live="polite" hidden></p>
+    <section class="image-preferences" aria-label="Immagini allegate">
+      <p id="image-preferences-help" class="image-preferences-help">JPG, PNG o WebP · massimo 5 MB per immagine.</p>
+      <div id="image-previews" class="image-previews" aria-live="polite"></div>
+      <p id="image-preferences-status" class="image-preferences-status" role="status" aria-live="polite"></p>
+    </section>
   </div>
 
+  <div id="generation-status" class="card generation-status" hidden role="status" aria-live="polite">
+    <div class="generation-header">
+      <strong id="generation-label">Generazione itinerario</strong>
+      <span id="generation-percent">0%</span>
+    </div>
+    <label class="sr-only" for="generation-progress">Avanzamento generazione itinerario</label>
+    <progress id="generation-progress" max="100" value="0">0%</progress>
+    <p id="generation-help" class="generation-help">Sto incrociando disponibilitÃ , budget e attivitÃ  compatibili.</p>
+    <div id="generation-feedback" class="feedback error" role="alert" aria-live="assertive" hidden>
+      <span id="generation-error" class="feedback-message"></span>
+      <button id="generation-retry-btn" class="secondary" type="button" hidden>Genera di nuovo</button>
+      <button id="generation-edit-btn" class="secondary" type="button" hidden>Modifica richiesta</button>
+    </div>
+  </div>
   <div id="itinerary-container"></div>
+  </main>
 
   <script type="module">
-    import { api, requireLogin, logout } from './api.js';
+    import { api, apiFormData, requireLogin, logout } from './api.js';
     requireLogin();
     document.getElementById('logout-link').addEventListener('click', logout);
 
-    let conversationId = null;
+    const ACTIVE_CONVERSATION_KEY = 'activeItineraryConversationId';
+    const ACTIVE_JOB_KEY = 'activeItineraryGenerationJob';
+    const CONVERSATION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const requestedConversationId = typeof window !== 'undefined' && typeof URLSearchParams !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('conversationId')
+      : null;
+    const storedConversationId = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
+    const isConversationId = (value) => CONVERSATION_ID_PATTERN.test(String(value || ''));
+    let conversationId = isConversationId(requestedConversationId)
+      ? requestedConversationId
+      : isConversationId(storedConversationId) ? storedConversationId : null;
+    if (storedConversationId && !isConversationId(storedConversationId)) {
+      localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
+    }
+    let pollingTimer = null;
+    let currentRequirements = {};
+    let requirementCorrectionPending = false;
+    let generationVersion = 0;
+    let sending = false;
+    let initialized = false;
+    let lastInitFailed = false;
+    let lastSentMessage = '';
+    let lastSentImageIds = [];
+    let cooldownTimer = null;
+    let cooldownUntil = 0;
+    let cooldownDuration = 0;
+    let cooldownKind = 'local';
+    let conversationPromise = null;
+    const COOLDOWN_KEY = () => `chatCooldownUntil:${conversationId || 'pending'}`;
+    const COOLDOWN_KIND_KEY = () => `chatCooldownKind:${conversationId || 'pending'}`;
+    const cooldownStorage = () => typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+    const preferenceImages = [];
+    const MAX_PREFERENCE_IMAGES = 4;
+    const MAX_PREFERENCE_IMAGE_SIZE = 5 * 1024 * 1024;
+    const PREFERENCE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const REQUIREMENT_CORRECTION_KEY = () => `chatRequirementCorrection:${conversationId || 'pending'}`;
+    const VOICE_ENABLED_KEY = 'travelAssistantExtraFeaturesEnabled';
+    const voiceToggle = document.getElementById('voice-toggle');
+    const voiceRecordButton = document.getElementById('voice-record-btn');
+    const voiceStatus = document.getElementById('voice-status');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let voiceRecognition = null;
+    let voiceListening = false;
+
+    function setVoiceStatus(message) { if (voiceStatus) voiceStatus.textContent = message; }
+    function setVoiceEnabled(enabled) {
+      if (voiceToggle) voiceToggle.checked = Boolean(enabled);
+      if (voiceRecordButton) voiceRecordButton.hidden = !enabled;
+      if (!enabled && voiceListening) voiceRecognition?.abort();
+      setVoiceStatus(enabled ? (SpeechRecognition ? 'Attive: premi il microfono per dettare' : 'Dettatura non supportata da questo browser') : 'Spente');
+      document.querySelectorAll('.extra-share-controls').forEach((element) => { element.hidden = !enabled; });
+    }
+    function initVoice() {
+      const enabled = localStorage.getItem(VOICE_ENABLED_KEY) === 'true';
+      setVoiceEnabled(enabled);
+      voiceToggle?.addEventListener('change', () => {
+        const next = voiceToggle.checked;
+        localStorage.setItem(VOICE_ENABLED_KEY, String(next));
+        setVoiceEnabled(next);
+      });
+      if (!SpeechRecognition) return;
+      voiceRecognition = new SpeechRecognition();
+      voiceRecognition.lang = 'it-IT';
+      voiceRecognition.interimResults = true;
+      voiceRecognition.continuous = false;
+      voiceRecognition.onstart = () => { voiceListening = true; voiceRecordButton.setAttribute('aria-pressed', 'true'); voiceRecordButton.classList.add('is-listening'); setVoiceStatus('Ascolto in corso…'); };
+      voiceRecognition.onresult = (event) => {
+        const transcript = [...event.results].map((result) => result[0].transcript).join('');
+        document.getElementById('chat-input').value = transcript;
+      };
+      voiceRecognition.onerror = (event) => { setVoiceStatus(event.error === 'not-allowed' ? 'Microfono non autorizzato: puoi continuare a scrivere' : 'Dettatura non riuscita: riprova'); };
+      voiceRecognition.onend = () => { voiceListening = false; voiceRecordButton.setAttribute('aria-pressed', 'false'); voiceRecordButton.classList.remove('is-listening'); if (voiceToggle.checked) setVoiceStatus('Attive: premi il microfono per dettare'); };
+      voiceRecordButton?.addEventListener('click', () => {
+        if (!voiceToggle.checked) return;
+        if (voiceListening) voiceRecognition.stop();
+        else { document.getElementById('chat-input').focus(); voiceRecognition.start(); }
+      });
+    }
+
+    async function ensureConversation() {
+      if (conversationId && CONVERSATION_ID_PATTERN.test(String(conversationId))) return conversationId;
+      if (conversationId) {
+        if (localStorage.getItem(ACTIVE_CONVERSATION_KEY) === conversationId) {
+          localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
+        }
+        conversationId = null;
+      }
+      if (!conversationPromise) {
+        conversationPromise = api('/chat/conversations', { method: 'POST' }).then(({ conversationId: id }) => {
+          conversationId = id;
+          localStorage.setItem(ACTIVE_CONVERSATION_KEY, id);
+          return id;
+        });
+      }
+      return conversationPromise;
+    }
+
+    function invalidateConversation(id) {
+      if (conversationId !== id) return;
+      if (localStorage.getItem(ACTIVE_CONVERSATION_KEY) === id) {
+        localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
+      }
+      conversationId = null;
+      conversationPromise = null;
+    }
+
+    function renderPreferenceImages() {
+      const preview = document.getElementById('image-previews');
+      const status = document.getElementById('image-preferences-status');
+      preview.replaceChildren();
+      preferenceImages.forEach((entry, index) => {
+        const item = document.createElement('figure');
+        item.className = 'image-preview';
+        const image = document.createElement('img');
+        image.src = entry.previewUrl;
+        image.alt = `Anteprima ${entry.file.name}`;
+        image.width = 120;
+        image.height = 88;
+        const caption = document.createElement('figcaption');
+        caption.textContent = entry.file.name;
+        const state = document.createElement('small');
+        state.className = `image-preview-state ${entry.status === 'error' ? 'error' : ''}`;
+        state.textContent = entry.status === 'uploading' ? 'Caricamento...' : entry.status === 'uploaded' ? 'Caricata' : entry.error || 'In attesa';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'image-preview-remove secondary';
+        remove.textContent = 'Rimuovi';
+        remove.setAttribute('aria-label', `Rimuovi ${entry.file.name}`);
+        remove.disabled = entry.status === 'uploading';
+        remove.addEventListener('click', async () => {
+          remove.disabled = true;
+          if (entry.id) {
+            try {
+              await api(`/chat/conversations/${conversationId}/preferences/images/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
+            } catch (error) {
+              entry.status = 'error';
+              entry.error = `Rimozione non riuscita: ${error.message}`;
+              renderPreferenceImages();
+              return;
+            }
+          }
+          URL.revokeObjectURL(entry.previewUrl);
+          entry.turn?.remove();
+          preferenceImages.splice(index, 1);
+          renderPreferenceImages();
+        });
+        item.append(image, caption, state, remove);
+        preview.append(item);
+      });
+      status.textContent = preferenceImages.length
+        ? `${preferenceImages.length} ${preferenceImages.length === 1 ? 'immagine pronta' : 'immagini pronte'} per la preferenza.`
+        : '';
+    }
+
+    function renderImageTurn(entry) {
+      const log = document.getElementById('chat-log');
+      if (!entry.turn) {
+        entry.turn = document.createElement('div');
+        entry.turn.className = 'msg user image-turn';
+        log.appendChild(entry.turn);
+      }
+      entry.turn.replaceChildren();
+      const figure = document.createElement('figure');
+      figure.className = 'image-turn-preview';
+      const image = document.createElement('img');
+      image.src = entry.previewUrl;
+      image.alt = `Immagine allegata: ${entry.file.name}`;
+      image.width = 160;
+      image.height = 112;
+      const caption = document.createElement('figcaption');
+      caption.textContent = entry.file.name;
+      figure.append(image, caption);
+      const detail = document.createElement('div');
+      detail.className = 'image-turn-detail';
+      const state = entry.status === 'uploading' ? 'Caricamento immagine…'
+        : entry.status === 'uploaded' && entry.visionStatus === 'used_in_turn' ? 'Immagine usata nel messaggio'
+          : entry.status === 'uploaded' && entry.visionStatus === 'deferred' ? 'Immagine ricevuta, analisi vision rimandata'
+            : entry.status === 'uploaded' && entry.visionStatus === 'fallback' ? 'Immagine ricevuta; analisi vision non disponibile'
+            : entry.status === 'uploaded' ? 'Immagine caricata, analisi non eseguita'
+          : entry.error || 'Immagine in attesa';
+      const stateNode = document.createElement('strong');
+      stateNode.textContent = state;
+      detail.append(stateNode);
+      const analysis = entry.analysis || {};
+      if (analysis.status === 'completed' && analysis.description) {
+        const suggestion = document.createElement('p');
+        suggestion.textContent = `Suggerimento vision (non confermato): ${analysis.description}`;
+        detail.append(suggestion);
+      } else if (entry.status === 'uploaded' && entry.visionStatus === 'deferred') {
+        const fallback = document.createElement('p');
+        fallback.textContent = 'Analisi vision rimandata: sarà ritentata insieme al prossimo messaggio.';
+        detail.append(fallback);
+      } else if (entry.status === 'uploaded' && entry.visionStatus === 'fallback') {
+        const fallback = document.createElement('p');
+        fallback.textContent = 'Analisi vision non disponibile in questo turno; puoi continuare descrivendo l’immagine a parole.';
+        detail.append(fallback);
+      } else if (entry.status === 'uploaded' && !entry.visionStatus) {
+        const fallback = document.createElement('p');
+        fallback.textContent = 'Analisi vision non eseguita: descrivimi a parole cosa vuoi usare come ispirazione.';
+        detail.append(fallback);
+      }
+      const tags = Array.isArray(analysis.extractedPreferences) ? analysis.extractedPreferences : [];
+      if (tags.length) {
+        const tagLine = document.createElement('p');
+        tagLine.textContent = `Tag suggeriti (non confermati): ${tags.join(', ')}`;
+        detail.append(tagLine);
+      }
+      entry.turn.append(figure, detail);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function updateVisionState(entries, state) {
+      entries.forEach((entry) => {
+        if (entry.status !== 'uploaded') return;
+        entry.visionStatus = state;
+        renderImageTurn(entry);
+      });
+    }
+
+    async function uploadPreferenceImage(entry) {
+      entry.status = 'uploading';
+      renderPreferenceImages();
+      try {
+        await ensureConversation();
+        const result = await apiFormData(`/chat/conversations/${conversationId}/preferences/images`, { file: entry.file });
+        entry.id = result.image?.id;
+        entry.analysis = result.image?.analysis || { status: 'metadata_only' };
+        entry.status = 'uploaded';
+      } catch (error) {
+        if (error.status === 404 && !entry.retriedStaleConversation) {
+          entry.retriedStaleConversation = true;
+          invalidateConversation(conversationId);
+          return uploadPreferenceImage(entry);
+        }
+        entry.status = 'error';
+        entry.error = `Upload non riuscito: ${error.message}`;
+      }
+      renderPreferenceImages();
+    }
+
+    async function commitPendingImages() {
+      const pending = [...preferenceImages];
+      const uploads = pending.map((entry) => entry.uploadPromise).filter(Boolean);
+      if (uploads.length) await Promise.all(uploads);
+      const committed = pending.filter((entry) => entry.status === 'uploaded' && preferenceImages.includes(entry));
+      committed.forEach(renderImageTurn);
+      committed.forEach((entry) => preferenceImages.splice(preferenceImages.indexOf(entry), 1));
+      if (committed.length) renderPreferenceImages();
+      return committed;
+    }
+
+    document.getElementById('preference-images').addEventListener('change', async (event) => {
+      const status = document.getElementById('image-preferences-status');
+      const rejected = [];
+      try {
+        await ensureConversation();
+      } catch (error) {
+        status.textContent = `Conversazione non pronta: ${error.message}. Riprova tra poco.`;
+        status.className = 'image-preferences-status error';
+        return;
+      }
+      for (const file of event.target.files) {
+        if (preferenceImages.length >= MAX_PREFERENCE_IMAGES) {
+          rejected.push(`${file.name}: massimo ${MAX_PREFERENCE_IMAGES} immagini`);
+          continue;
+        }
+        if (!PREFERENCE_IMAGE_TYPES.has(file.type)) {
+          rejected.push(`${file.name}: formato non supportato`);
+          continue;
+        }
+        if (file.size > MAX_PREFERENCE_IMAGE_SIZE) {
+          rejected.push(`${file.name}: supera 5 MB`);
+          continue;
+        }
+        const entry = { file, previewUrl: URL.createObjectURL(file), status: 'queued' };
+        preferenceImages.push(entry);
+        entry.uploadPromise = uploadPreferenceImage(entry);
+      }
+      event.target.value = '';
+      renderPreferenceImages();
+      if (rejected.length) {
+        status.textContent = `${preferenceImages.length ? `${preferenceImages.length} immagini pronte. ` : ''}Scartate: ${rejected.join('; ')}`;
+        status.className = 'image-preferences-status error';
+      } else {
+        status.className = 'image-preferences-status';
+      }
+    });
+
+    function requirementsMatch(left, right) {
+      const normalize = (value) => Array.isArray(value) ? value.map(normalize)
+        : value && typeof value === 'object'
+          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, normalize(value[key])])) : value;
+      return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+    }
+
+    function clearGeneration() {
+      generationVersion += 1;
+      clearTimeout(pollingTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      document.getElementById('generation-status').hidden = true;
+      renderItinerary(null);
+    }
+
+    function setChatFeedback(message = '', { retry = false, cooldownSeconds = 0, cooldownKind: nextCooldownKind = 'local' } = {}) {
+      const feedback = document.getElementById('chat-error');
+      const cooldownActive = cooldownUntil > Date.now();
+      feedback.hidden = !message && !cooldownActive;
+      const messageNode = feedback.querySelector?.('.feedback-message');
+      if (messageNode) messageNode.textContent = message;
+      const retryButton = document.getElementById('chat-retry-btn');
+      if (retryButton) retryButton.hidden = !(retry || cooldownActive);
+      if (cooldownSeconds > 0) startCooldown(cooldownSeconds, nextCooldownKind);
+      else if (!message || !retry) renderCooldown();
+    }
+
+    function overlapDetails(payload) {
+      const warning = payload?.overlapWarning || payload?.preflight?.overlap || payload?.dateOverlap || payload?.overlap;
+      if (!warning || warning === false) return null;
+      const record = warning === true ? {} : warning;
+      if (record.hasOverlap === false || record.overlap === false || record.detected === false) return null;
+      const booking = record.booking || record.confirmedBooking || record.existingBooking || {};
+      const itinerary = booking.itinerary || record.itinerary || {};
+      const details = itinerary.details || record.details || {};
+      const dates = [
+        record.startDate, record.endDate, record.start, record.end,
+        details.flights?.outbound?.date, details.flights?.inbound?.date,
+        ...(details.hotel?.nights || []), ...(details.activities || []).map((activity) => activity?.date),
+      ].filter(Boolean).map((value) => new Date(value)).filter((date) => !Number.isNaN(date.getTime()));
+      const formatDate = (value) => value ? value.toLocaleDateString('it-IT') : '';
+      const destination = record.destination || record.destinationName || details.destination
+        || details.city || details.flights?.outbound?.destinationAirport?.name
+        || details.flights?.outbound?.destinationAirport?.iataCode || '';
+      const dateLabel = dates.length
+        ? `${formatDate(new Date(Math.min(...dates.map((date) => date.getTime()))))} – ${formatDate(new Date(Math.max(...dates.map((date) => date.getTime()))))}`
+        : 'le date selezionate';
+      return `${destination ? `${destination}: ` : ''}${dateLabel}`;
+    }
+
+    function renderOverlapWarning(payload) {
+      const warning = document.getElementById('chat-overlap-warning');
+      if (!warning) return;
+      const details = overlapDetails(payload);
+      warning.hidden = !details;
+      if (details) warning.querySelector('.chat-overlap-details').textContent = `Coincidono con una prenotazione confermata (${details}). Puoi modificare le date prima di continuare.`;
+    }
+
+    function providerCooldownMessage(seconds) {
+      const wait = Math.max(1, Math.ceil(Number(seconds) || 30));
+      return `Limite temporaneo del provider: riprova tra ${wait} secondi. Non è un blocco locale.`;
+    }
+
+    function renderCooldown() {
+      const remainingMs = Math.max(0, cooldownUntil - Date.now());
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const cooldown = document.getElementById('chat-cooldown');
+      const progress = document.getElementById('chat-cooldown-progress');
+      const label = document.getElementById('chat-cooldown-label');
+      const retryButton = document.getElementById('chat-retry-btn');
+      if (cooldown) cooldown.hidden = remainingSeconds === 0;
+      if (progress) {
+        progress.max = cooldownDuration || remainingSeconds || 1;
+        progress.value = remainingSeconds;
+      }
+      if (label) label.textContent = remainingSeconds ? `Riprova tra ${remainingSeconds} secondi` : 'Puoi riprovare ora';
+      if (retryButton) retryButton.disabled = remainingSeconds > 0;
+      syncComposerAvailability();
+      if (remainingSeconds === 0) {
+        if (cooldownTimer) clearTimeout(cooldownTimer);
+        cooldownTimer = null;
+        cooldownStorage()?.removeItem(COOLDOWN_KEY());
+        cooldownStorage()?.removeItem(COOLDOWN_KIND_KEY());
+        cooldownUntil = 0;
+        cooldownDuration = 0;
+        cooldownKind = 'local';
+        syncComposerAvailability();
+        return;
+      }
+      if (cooldownTimer) clearTimeout(cooldownTimer);
+      cooldownTimer = setTimeout(renderCooldown, Math.min(1000, remainingMs));
+    }
+
+    function clearChatCooldown() {
+      if (cooldownTimer) clearTimeout(cooldownTimer);
+      cooldownTimer = null;
+      cooldownUntil = 0;
+      cooldownDuration = 0;
+      cooldownKind = 'local';
+      cooldownStorage()?.removeItem(COOLDOWN_KEY());
+      cooldownStorage()?.removeItem(COOLDOWN_KIND_KEY());
+      renderCooldown();
+    }
+
+    async function startNewConversation() {
+      if (sending) return;
+      clearTimeout(pollingTimer);
+      pollingTimer = null;
+      clearGeneration();
+      clearChatCooldown();
+      renderOverlapWarning(null);
+      cooldownStorage()?.removeItem(REQUIREMENT_CORRECTION_KEY());
+      preferenceImages.splice(0).forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      document.getElementById('preference-images').value = '';
+      document.getElementById('chat-log').replaceChildren();
+      document.getElementById('image-previews').replaceChildren();
+      document.getElementById('image-preferences-status').textContent = '';
+      localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
+      conversationId = null;
+      conversationPromise = null;
+      currentRequirements = {};
+      requirementCorrectionPending = false;
+      lastSentMessage = '';
+      lastSentImageIds = [];
+      initialized = false;
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState({}, '', 'chat.html');
+      }
+      await init();
+      document.getElementById('chat-input')?.focus();
+    }
+
+    function startCooldown(seconds, kind = 'local') {
+      const duration = Math.max(1, Number(seconds) || 0);
+      cooldownDuration = duration;
+      cooldownKind = kind === 'provider' ? 'provider' : 'local';
+      cooldownUntil = Date.now() + duration * 1000;
+      cooldownStorage()?.setItem(COOLDOWN_KEY(), String(cooldownUntil));
+      cooldownStorage()?.setItem(COOLDOWN_KIND_KEY(), cooldownKind);
+      renderCooldown();
+    }
+
+    function syncComposerAvailability() {
+      const blocked = cooldownUntil > Date.now();
+      const sendButton = document.getElementById('send-btn');
+      const input = document.getElementById('chat-input');
+      if (sendButton) sendButton.disabled = !initialized || sending || blocked;
+      if (input) input.disabled = !initialized || blocked;
+      const newChatButton = document.getElementById('new-chat-btn');
+      if (newChatButton) newChatButton.disabled = sending;
+    }
+
+    function restoreCooldown() {
+      const saved = Number(cooldownStorage()?.getItem(COOLDOWN_KEY()));
+      if (Number.isFinite(saved) && saved > Date.now()) {
+        cooldownUntil = saved;
+        cooldownKind = cooldownStorage()?.getItem(COOLDOWN_KIND_KEY()) === 'provider' ? 'provider' : 'local';
+        cooldownDuration = Math.ceil((saved - Date.now()) / 1000);
+        const feedback = document.getElementById('chat-error');
+        const messageNode = feedback?.querySelector?.('.feedback-message');
+        if (cooldownKind === 'provider' && messageNode) {
+          messageNode.textContent = providerCooldownMessage(cooldownDuration);
+          feedback.hidden = false;
+        }
+        renderCooldown();
+      } else if (saved) {
+        cooldownStorage()?.removeItem(COOLDOWN_KEY());
+        cooldownStorage()?.removeItem(COOLDOWN_KIND_KEY());
+        cooldownUntil = 0;
+        cooldownDuration = 0;
+        cooldownKind = 'local';
+        renderCooldown();
+      }
+    }
+
+    function setGenerationFeedback(message = '', { retry = false, edit = retry, functionalFailure = false, hideMessage = false } = {}) {
+      if (functionalFailure) {
+        clearChatCooldown();
+        setChatFeedback();
+      }
+      const feedback = document.getElementById('generation-feedback');
+      feedback.hidden = hideMessage ? false : !message;
+      const errorNode = document.getElementById('generation-error');
+      if (errorNode) errorNode.textContent = message;
+      const retryButton = document.getElementById('generation-retry-btn');
+      if (retryButton) retryButton.hidden = !retry;
+      const editButton = document.getElementById('generation-edit-btn');
+      if (editButton) editButton.hidden = !edit;
+    }
+
+    function setJourneyStep(currentIndex) {
+      document.querySelectorAll?.('.demo-journey li').forEach((step, index) => {
+        step.classList.toggle('is-current', index === currentIndex);
+        if (index === currentIndex) step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
+      });
+    }
+
+    function showGenerationTransition() {
+      const panel = document.getElementById('generation-status');
+      panel.hidden = false;
+      panel.querySelector?.('.generation-header')?.toggleAttribute('hidden', false);
+      document.getElementById('generation-progress').hidden = false;
+      document.getElementById('generation-help').hidden = false;
+      document.getElementById('generation-label').textContent = 'Avvio generazione itinerario';
+      document.getElementById('generation-percent').textContent = '0%';
+      document.getElementById('generation-progress').value = 0;
+      document.getElementById('generation-help').textContent = 'Sto passando dalla conversazione alla generazione: puoi seguire qui l’avanzamento.';
+      setGenerationFeedback();
+      setJourneyStep(2);
+    }
+
+    function setSendState(message = '') {
+      const status = document.getElementById('chat-send-status');
+      if (status) {
+        status.hidden = !message;
+        status.textContent = message;
+      }
+      const composer = document.querySelector?.('.chat-composer');
+      if (composer?.toggleAttribute) composer.toggleAttribute('aria-busy', Boolean(message));
+    }
+
+    function describeChatFailure(error) {
+      const code = error?.payload?.code;
+      const isProviderCircuitOpen = error?.payload?.code === 'GROQ_CIRCUIT_OPEN';
+      const providerDetails = `${code || ''} ${error?.message || ''} ${error?.payload?.message || ''}`;
+      const providerQuota = /(?:TPD|quota|rate.?limit|tokens?.*day)/i.test(providerDetails);
+      const retryAfterSeconds = Number(error?.retryAfter || error?.payload?.retryAfter || 0)
+        || Number(error?.payload?.retryAfterMs || 0) / 1000;
+      if (code === 'CONVERSATION_LOCK_TIMEOUT') {
+        return { message: 'La conversazione è occupata da un altro turno. Attendi il rilascio del lock e riprova.', cooldownSeconds: error.retryAfter || 10 };
+      }
+      if (error?.status === 429 || providerQuota) {
+        const wait = retryAfterSeconds > 0 ? retryAfterSeconds : 30;
+        return { message: providerCooldownMessage(wait), cooldownSeconds: wait, cooldownKind: 'provider' };
+      }
+      if (error?.status >= 500 || isProviderCircuitOpen || code === 'GROQ_PROVIDER_UNAVAILABLE') {
+        const wait = retryAfterSeconds > 0 ? retryAfterSeconds : 30;
+        return { message: providerCooldownMessage(wait), cooldownSeconds: wait, cooldownKind: 'provider' };
+      }
+      return { message: error?.message || 'Invio non riuscito. Riprova tra poco.', cooldownSeconds: 0 };
+    }
 
     function escapeHtml(str) {
       const div = document.createElement('div');
-      div.textContent = str || '';
+      div.textContent = str == null ? '' : String(str);
       return div.innerHTML;
+    }
+
+    function safeHttpUrl(value) {
+      try {
+        if (value == null || !String(value).trim()) return '';
+        const url = new URL(String(value), window.location.href);
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+      } catch {
+        return '';
+      }
     }
 
     function renderMarkdown(text) {
@@ -48,15 +656,15 @@
 
       function flushTable() {
         if (tableRows.length >= 2) {
-          let html = '<table class="chat-table"><thead><tr>';
-          for (const h of tableRows[0]) html += `<th>${h}</th>`;
+          let html = '<div class="chat-table-wrap"><table class="chat-table"><caption class="sr-only">Tabella informativa del viaggio</caption><thead><tr>';
+          for (const h of tableRows[0]) html += `<th scope="col">${h}</th>`;
           html += '</tr></thead><tbody>';
           for (let i = 1; i < tableRows.length; i++) {
             html += '<tr>';
             for (const c of tableRows[i]) html += `<td>${c}</td>`;
             html += '</tr>';
           }
-          html += '</tbody></table>';
+          html += '</tbody></table></div>';
           output.push(html);
         } else if (tableRows.length === 1) {
           output.push('| ' + tableRows[0].join(' | ') + ' |');
@@ -87,19 +695,297 @@
       return res;
     }
 
+    function sanitizeAssistantText(text) {
+      let clean = String(text || '');
+      // Chain-of-thought e marker analoghi non sono contenuto destinato all’utente.
+      clean = clean.replace(/<(think|analysis|reasoning)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+      clean = clean.replace(/<(think|analysis|reasoning)\b[^>]*>[\s\S]*$/gi, '');
+      clean = clean.replace(/<\/?(?:think|analysis|reasoning)\b[^>]*>/gi, '');
+      return clean.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     function appendMessage(role, text) {
+      const safeText = role === 'assistant' ? sanitizeAssistantText(text) : String(text || '');
+      if (role === 'assistant' && !safeText) return;
       const log = document.getElementById('chat-log');
       const div = document.createElement('div');
       div.className = `msg ${role}`;
-      div.innerHTML = renderMarkdown(text);
+      div.innerHTML = renderMarkdown(safeText);
       log.appendChild(div);
       log.scrollTop = log.scrollHeight;
     }
 
+    function mediaMarkup(media, extraClass = '') {
+      const imageUrl = safeHttpUrl(media?.url);
+      if (!imageUrl) return '';
+      const sourceUrl = safeHttpUrl(media?.sourceUrl);
+      const licenseUrl = safeHttpUrl(media?.licenseUrl);
+      const credit = sourceUrl
+        ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(media?.author || 'Fonte')}</a>`
+        : escapeHtml(media?.author || 'Fonte non disponibile');
+      const license = licenseUrl
+        ? `<a href="${escapeHtml(licenseUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(media.license || 'Licenza')}</a>`
+        : escapeHtml(media?.license || 'Licenza non disponibile');
+      return `<figure class="media ${extraClass}">
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(media.alt)}" width="960" height="540" loading="lazy" decoding="async" />
+        <figcaption>Foto: ${credit} · ${license}</figcaption>
+      </figure>`;
+    }
+
+    function removeFailedImages(root) {
+      root.querySelectorAll('.media img').forEach((image) => {
+        image.addEventListener('error', () => image.closest('.media')?.remove(), { once: true });
+      });
+    }
+
     async function init() {
-      const { conversationId: id } = await api('/chat/conversations', { method: 'POST' });
-      conversationId = id;
-      appendMessage('assistant', 'Ciao! Dimmi tutto sul viaggio che hai in mente: destinazione, budget, quando partiresti, con chi e cosa ti piace fare.');
+      initialized = false;
+      lastInitFailed = false;
+      document.getElementById('send-btn').disabled = true;
+      try {
+      await ensureConversation();
+      restoreCooldown();
+      requirementCorrectionPending = cooldownStorage()?.getItem(REQUIREMENT_CORRECTION_KEY()) === '1';
+      const conversation = await api(`/chat/conversations/${conversationId}`);
+      currentRequirements = conversation.state?.requirements || {};
+      document.getElementById('chat-log').replaceChildren();
+      const historicalIssue = conversation.state?.generationIssue;
+      for (const message of conversation.messages || []) {
+        const isDuplicateIssue = historicalIssue && message.role === 'assistant'
+          && historicalIssue.message && String(message.content || '').includes(historicalIssue.message);
+        if (!isDuplicateIssue) appendMessage(message.role, message.content);
+      }
+      if (historicalIssue) {
+        document.getElementById('generation-status').dataset.functionalIssueShown = 'true';
+        appendMessage('assistant', renderGenerationIssueMessage(historicalIssue));
+        setJourneyStep(1);
+      }
+      if (!conversation.messages?.length) appendMessage('assistant', 'Ciao! Dimmi tutto sul viaggio che hai in mente: destinazione, budget, quando partiresti, con chi e cosa ti piace fare.');
+      initialized = true;
+      setChatFeedback();
+      const savedJob = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || 'null');
+      if (savedJob?.conversationId === conversationId) {
+        if (savedJob.requirementsSnapshot && !requirementsMatch(savedJob.requirementsSnapshot, currentRequirements)) clearGeneration();
+        else if (savedJob.id) await pollGenerationJob(savedJob.id);
+        else if (savedJob.idempotencyKey) await startGeneration();
+      }
+      } catch (err) {
+        if (err.sessionExpired) return;
+        if (err.status === 404 && conversationId) {
+          currentRequirements = {};
+          document.getElementById('chat-log').replaceChildren();
+          appendMessage('assistant', 'Ciao! Dimmi tutto sul viaggio che hai in mente: destinazione, budget, quando partiresti, con chi e cosa ti piace fare.');
+          initialized = true;
+          setChatFeedback();
+          return;
+        }
+        document.getElementById('chat-error').textContent = `Ripristino non disponibile: ${err.message}. Nuovo tentativo in corso…`;
+        lastInitFailed = true;
+        setChatFeedback(`Ripristino non disponibile: ${err.message}`, { retry: true });
+        pollingTimer = setTimeout(init, 3000);
+      } finally {
+        syncComposerAvailability();
+        document.getElementById('preference-images').disabled = !initialized;
+      }
+    }
+
+    function showJob(job) {
+      const panel = document.getElementById('generation-status');
+      const progress = Math.max(0, Math.min(100, job.progress || 0));
+      panel.hidden = false;
+      const labels = { queued: 'In coda', running: 'Sto costruendo il tuo itinerario', completed: 'Itinerario pronto', failed: 'Generazione interrotta' };
+      document.getElementById('generation-label').textContent = job.progressLabel || labels[job.status] || 'Generazione itinerario';
+      document.getElementById('generation-percent').textContent = `${progress}%`;
+      document.getElementById('generation-progress').value = progress;
+      document.getElementById('generation-progress').textContent = `${progress}%`;
+      const functionalFailure = job.status === 'failed' && Boolean(job.result?.errorCode);
+      document.querySelector?.('.generation-header')?.toggleAttribute('hidden', functionalFailure);
+      document.getElementById('generation-progress').hidden = functionalFailure;
+      document.getElementById('generation-help').textContent = job.status === 'failed'
+        ? functionalFailure ? 'La richiesta resta salvata: modifica il requisito indicato per cercare una combinazione disponibile.' : 'Puoi riprovare: i requisiti raccolti restano invariati.'
+        : job.status === 'completed' ? 'Confronta la proposta con l’alternativa e scegli con calma.' : 'Sto incrociando disponibilità, budget e attività compatibili.';
+      document.getElementById('generation-help').hidden = functionalFailure;
+      if (job.status === 'failed') {
+        setJourneyStep(1);
+        clearChatCooldown();
+        if (functionalFailure && !panel.dataset.functionalIssueShown) {
+          panel.dataset.functionalIssueShown = 'true';
+          appendMessage('assistant', renderGenerationIssueMessage({ ...job.result, message: job.error }));
+        }
+      }
+      setGenerationFeedback(job.status === 'failed' && !functionalFailure ? (job.error || 'La generazione non è riuscita.') : '', {
+        retry: job.status === 'failed' && !functionalFailure,
+        edit: functionalFailure,
+        functionalFailure,
+        hideMessage: functionalFailure,
+      });
+    }
+
+    function renderGenerationIssueMessage(issue) {
+      if (!issue) return '';
+      const requirements = issue.requirementsSnapshot || {};
+      const outbound = issue.outbound || issue.flights?.outbound || {};
+      const origin = outbound.originAirport?.iataCode || outbound.origin?.iataCode || issue.outboundOrigin || requirements.departureAirport;
+      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.country;
+      const outboundDate = outbound.date || issue.outboundDate || requirements.outboundDate || requirements.travelDate;
+      const duration = Number(issue.durationDays || requirements.durationDays || 0);
+      const formatDate = (value) => {
+        const parsed = value ? new Date(value) : null;
+        return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleDateString('it-IT') : '';
+      };
+      const returnDate = issue.requestedReturnDate || issue.returnDate || outbound.expectedReturnDate
+        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + duration * 86400000).toISOString() : '');
+      const summary = origin && destination && formatDate(outboundDate)
+        ? `**Richiesta originale**\n- Partenza usata: ${origin} → ${destination}, ${formatDate(outboundDate)}${duration > 0 ? `, ${duration} giorni` : ''}${formatDate(returnDate) ? `, ritorno atteso ${formatDate(returnDate)}` : ''}\n\n`
+        : '';
+      const reason = String(issue.message || 'La combinazione richiesta non è disponibile nel catalogo.')
+        .replace(/\s*Ritorni disponibili dal catalogo:[^.]*\./i, '')
+        .trim();
+      const rawAvailableReturns = Array.isArray(issue.availableReturns) ? issue.availableReturns : issue.alternatives;
+      const seenReturnDays = new Set();
+      const outboundIsoDay = outboundDate && !Number.isNaN(new Date(outboundDate).getTime())
+        ? new Date(outboundDate).toISOString().slice(0, 10) : '';
+      const availableReturns = Array.isArray(rawAvailableReturns)
+        ? rawAvailableReturns.filter((alternative) => {
+          const rawDate = alternative?.availableReturnDate || alternative?.date;
+          const parsed = rawDate ? new Date(rawDate) : null;
+          if (!parsed || Number.isNaN(parsed.getTime())) return false;
+          const isoDay = parsed.toISOString().slice(0, 10);
+          if (outboundIsoDay && isoDay <= outboundIsoDay) return false;
+          if (seenReturnDays.has(isoDay)) return false;
+          seenReturnDays.add(isoDay);
+          return true;
+        }) : [];
+      const alternatives = Array.isArray(availableReturns) && availableReturns.length > 0
+        ? `\n\n**Alternative disponibili**\n${availableReturns.map((alternative) => {
+          const alternativeDate = alternative?.availableReturnDate || alternative?.date;
+          const formatted = formatDate(alternativeDate);
+          if (!formatted) return '- Modifica durata: data di ritorno non specificata.';
+          if (!returnDate) return `- **Ritorno ${formatted}** — modifica durata.`;
+          const difference = Math.round((new Date(alternativeDate).getTime() - new Date(returnDate).getTime()) / 86400000);
+          const differenceText = difference > 0 ? `+${difference} giorni rispetto al ritorno richiesto`
+            : difference < 0 ? `${difference} giorni rispetto al ritorno richiesto` : 'stessa data del ritorno richiesto';
+          const resultingDuration = duration > 0 ? duration + difference : 0;
+          return `- **Ritorno ${formatted}** — ${differenceText}${resultingDuration > 0 ? `; durata risultante ${resultingDuration} giorni` : '; modifica durata'}.`;
+        }).join('\n')}`
+        : '';
+      return `${summary}**Perché non funziona**\n${reason}${alternatives}\n\nModifica date, durata, aeroporto, budget o preferenze: i requisiti già raccolti resteranno invariati.`;
+    }
+
+    function requirementsConfirmationMessage(requirements, fallback) {
+      const outboundDate = requirements?.outboundDate;
+      const returnDate = requirements?.returnDate;
+      const formatDate = (value) => {
+        const date = value ? new Date(value) : null;
+        return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('it-IT') : '';
+      };
+      if (!formatDate(outboundDate) || !formatDate(returnDate)) return fallback;
+      const duration = Number(requirements.durationDays || 0)
+        || Math.round((new Date(returnDate).getTime() - new Date(outboundDate).getTime()) / 86400000);
+      const route = requirements.departureAirport && (requirements.destinationAirport || requirements.country)
+        ? ` (${requirements.departureAirport} → ${requirements.destinationAirport || requirements.country})` : '';
+      return `**Riepilogo aggiornato**\n- Partenza${route}: ${formatDate(outboundDate)}\n- Ritorno: ${formatDate(returnDate)}\n- Durata: ${duration} giorni\n\nConfermi questi nuovi requisiti?`;
+    }
+
+    function generationIssueMessage(issue) {
+      if (!issue) return '';
+      const requirements = issue.requirementsSnapshot || {};
+      const outbound = issue.outbound || issue.flights?.outbound || {};
+      const origin = outbound.originAirport?.iataCode || outbound.origin?.iataCode || issue.outboundOrigin || requirements.departureAirport;
+      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.country;
+      const outboundDate = outbound.date || issue.outboundDate || requirements.outboundDate || requirements.travelDate;
+      const duration = Number(issue.durationDays || requirements.durationDays || 0);
+      const formatDate = (value) => {
+        const parsed = value ? new Date(value) : null;
+        return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleDateString('it-IT') : '';
+      };
+      const returnDate = issue.requestedReturnDate || issue.returnDate || outbound.expectedReturnDate
+        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + duration * 86400000).toISOString() : '');
+      const tripSummary = origin && destination && formatDate(outboundDate)
+        ? `Partenza usata: ${origin} → ${destination} il ${formatDate(outboundDate)}${duration > 0 ? `; durata: ${duration} giorni` : ''}${formatDate(returnDate) ? `; ritorno atteso: ${formatDate(returnDate)}` : ''}. `
+        : '';
+      const alternatives = Array.isArray(issue.alternatives) && issue.alternatives.length > 0
+        ? ` Alternative disponibili nel catalogo: ${issue.alternatives.map((alternative) =>
+          alternative?.availableReturnDate?.slice?.(0, 10) || alternative?.date?.slice?.(0, 10) || alternative?.city,
+        ).filter(Boolean).join(', ')}.`
+        : '';
+      return `${tripSummary}${issue.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (date, durata, aeroporto, budget o preferenze), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
+    }
+
+    async function pollGenerationJob(jobId, version = generationVersion) {
+      clearTimeout(pollingTimer);
+      try {
+        const { job } = await api(`/itinerary-jobs/${jobId}`);
+        if (version !== generationVersion) return;
+        if (job.result?.requirementsSnapshot && !requirementsMatch(job.result.requirementsSnapshot, currentRequirements)) {
+          clearGeneration();
+          return;
+        }
+        showJob(job);
+        const saved = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || '{}');
+        localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({
+          ...saved, id: job.id, conversationId: job.conversationId, status: job.status,
+        }));
+        if (job.status === 'completed') {
+          const conversation = await api(`/chat/conversations/${conversationId}`);
+          if (version !== generationVersion) return;
+          const result = conversation.state?.lastResult;
+          if (!result?.requirementsSnapshot || !requirementsMatch(result.requirementsSnapshot, conversation.state.requirements)
+            || !requirementsMatch(result, job.result)) {
+            clearGeneration();
+            return;
+          }
+          currentRequirements = conversation.state.requirements;
+          renderItinerary(result);
+          return;
+        }
+        if (job.status === 'failed') {
+          return;
+        }
+        pollingTimer = setTimeout(() => pollGenerationJob(jobId, version), 1000);
+      } catch (err) {
+        if (version !== generationVersion) return;
+        if (err.sessionExpired) return;
+        document.getElementById('generation-status').hidden = false;
+        document.getElementById('generation-error').textContent = `Aggiornamento non disponibile: ${err.message}. Nuovo tentativo in corso…`;
+        setGenerationFeedback(`Aggiornamento non disponibile: ${err.message}`, { retry: true });
+        pollingTimer = setTimeout(() => pollGenerationJob(jobId, version), 3000);
+      }
+    }
+
+    async function startGeneration() {
+      const version = ++generationVersion;
+      showGenerationTransition();
+      clearTimeout(pollingTimer);
+      const saved = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || 'null');
+      const reusable = saved?.conversationId === conversationId && !['completed', 'failed'].includes(saved.status);
+      const idempotencyKey = reusable
+        ? saved.idempotencyKey
+        : crypto.randomUUID();
+      // La chiave viene salvata prima della richiesta: anche un timeout può essere ritentato
+      // senza accodare due generazioni.
+      const requirementsSnapshot = reusable ? (saved.requirementsSnapshot || currentRequirements) : currentRequirements;
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ conversationId, idempotencyKey, requirementsSnapshot, status: 'creating' }));
+      try {
+      const { job } = await api('/itinerary-jobs', {
+        method: 'POST', body: { conversationId, idempotencyKey },
+      });
+      if (version !== generationVersion) return;
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({
+        id: job.id, conversationId, idempotencyKey, requirementsSnapshot, status: job.status,
+      }));
+      showJob(job);
+      await pollGenerationJob(job.id, version);
+      } catch (err) {
+        if (version !== generationVersion) return;
+        if (err.sessionExpired) return;
+        document.getElementById('generation-status').hidden = false;
+        document.getElementById('generation-error').textContent = `Avvio non disponibile: ${err.message}. Nuovo tentativo in corso…`;
+        setGenerationFeedback(`Avvio non disponibile: ${err.message}`, { retry: true });
+        pollingTimer = setTimeout(() => {
+          if (version === generationVersion) startGeneration();
+        }, 3000);
+      }
     }
 
     function renderItinerary(result) {
@@ -108,7 +994,7 @@
       if (!result) return;
 
       if (result.error) {
-        container.innerHTML = `<div class="card error">${result.error}</div>`;
+        container.innerHTML = `<div class="card error">${escapeHtml(result.error)}</div>`;
         return;
       }
 
@@ -133,66 +1019,220 @@
           : '<span class="badge pending">Fuori budget</span>';
 
         card.innerHTML = `
-          <h2>${isAlternative ? '💡 Itinerario alternativo (con compromessi)' : '✨ Itinerario proposto'} ${budgetBadge}</h2>
-          ${isAlternative && option.compromises && option.compromises.length ? `<p><strong>Compromessi applicati:</strong> ${option.compromises.join(' ')}</p>` : ''}
-          <p><strong>✈️ Volo andata:</strong> ${option.flights.outbound.originAirport.iataCode} → ${option.flights.outbound.destinationAirport.iataCode}, ${new Date(option.flights.outbound.date).toLocaleDateString('it-IT')}</p>
-          <p><strong>✈️ Volo ritorno:</strong> ${option.flights.inbound.originAirport.iataCode} → ${option.flights.inbound.destinationAirport.iataCode}, ${new Date(option.flights.inbound.date).toLocaleDateString('it-IT')}</p>
-          <p><strong>🏨 Hotel:</strong> ${option.hotel.hotel.name} (${option.hotel.nights.length} notti)</p>
-          <p><strong>🎟️ Attività (${option.activities.length}):</strong></p>
-          <ul>${option.activities.map(a => `<li>Giorno ${a.day} (${a.date}): ${a.name} - ${a.cost.toFixed(2)}€</li>`).join('')}</ul>
-          <p><strong>Costo totale: ${option.totalCost.toFixed(2)}€</strong> <small style="color:#666;">(voli: ${option.breakdown.flightCost.toFixed(2)}€, hotel: ${option.breakdown.hotelCost.toFixed(2)}€, attività: ${option.breakdown.activityCost.toFixed(2)}€)</small></p>
-          <button class="book-btn" data-choice="${choice}">Prenota ${isAlternative ? 'l\'alternativa' : 'questa proposta'}</button>
-          <p class="book-status"></p>
+          ${mediaMarkup(option.destinationMedia)}
+          <h2>${isAlternative ? 'Itinerario alternativo' : 'Itinerario proposto'} ${budgetBadge}</h2>
+          ${option.compromises && option.compromises.length ? `<p><strong>Compromessi applicati:</strong> ${option.compromises.map(escapeHtml).join(' ')}</p>` : ''}
+          <p><strong>Volo di andata:</strong> ${escapeHtml(option.flights.outbound.originAirport.iataCode)} → ${escapeHtml(option.flights.outbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.outbound.date).toLocaleDateString('it-IT'))}</p>
+          <p><strong>Volo di ritorno:</strong> ${escapeHtml(option.flights.inbound.originAirport.iataCode)} → ${escapeHtml(option.flights.inbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.inbound.date).toLocaleDateString('it-IT'))}</p>
+          <p><strong>Hotel:</strong> ${escapeHtml(option.hotel.hotel.name)} (${escapeHtml(option.hotel.nights.length)} notti)</p>
+          <p><strong>Attività (${option.activities.length}):</strong></p>
+          <ul class="activity-list">${option.activities.map(a => `<li class="activity-item">${mediaMarkup(a.media, 'activity-media')}<span>Giorno ${escapeHtml(a.day)} (${escapeHtml(a.date)}): ${escapeHtml(a.name)} - ${Number(a.cost || 0).toFixed(2)}€</span></li>`).join('')}</ul>
+          <p><strong>Costo totale: ${option.totalCost.toFixed(2)}€</strong> <small class="cost-breakdown">(voli: ${option.breakdown.flightCost.toFixed(2)}€, hotel: ${option.breakdown.hotelCost.toFixed(2)}€, attività: ${option.breakdown.activityCost.toFixed(2)}€)</small></p>
+          <div class="itinerary-actions"><button class="book-btn" data-choice="${choice}">Prenota ${isAlternative ? 'l\'alternativa' : 'questa proposta'}</button><span class="share-actions extra-share-controls" aria-label="Condivisione"><button class="share-copy-btn secondary" type="button" aria-label="Copia link itinerario">Copia</button><button class="share-mock-btn secondary" type="button" data-network="WhatsApp" aria-label="Condividi su WhatsApp">WA</button><button class="share-mock-btn secondary" type="button" data-network="Instagram" aria-label="Condividi su Instagram">IG</button><button class="share-mock-btn secondary" type="button" data-network="X" aria-label="Condividi su X">X</button></span></div>
+          <p class="share-status" role="status" aria-live="polite"></p>
+          <p class="book-status" role="status" aria-live="polite"></p>
         `;
         container.appendChild(card);
+        removeFailedImages(card);
 
         const btn = card.querySelector('.book-btn');
         const statusEl = card.querySelector('.book-status');
+        const shareStatus = card.querySelector('.share-status');
+        const shareText = `${isAlternative ? 'Itinerario alternativo' : 'Itinerario'} per ${option.flights.outbound.destinationAirport.city}, dal ${new Date(option.flights.outbound.date).toLocaleDateString('it-IT')} al ${new Date(option.flights.inbound.date).toLocaleDateString('it-IT')} · ${option.totalCost.toFixed(2)}€`;
+        card.querySelector('.share-copy-btn')?.addEventListener('click', async () => {
+          try { const { token } = await api(`/share/itineraries/${encodeURIComponent(option.id)}`, { method: 'POST' }); const shareUrl = `${window.location.origin}/share.html?token=${encodeURIComponent(token)}`; await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`); shareStatus.textContent = 'Link condivisibile copiato.'; }
+          catch { shareStatus.textContent = 'Copia non disponibile: puoi condividere manualmente il riepilogo visibile.'; }
+        });
+        card.querySelectorAll('.share-mock-btn').forEach((shareButton) => shareButton.addEventListener('click', () => {
+          shareStatus.textContent = `Anteprima ${shareButton.dataset.network} pronta: la condivisione reale sarà disponibile in una versione successiva.`;
+        }));
+        const generation = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || '{}');
+        const attemptKey = `bookingAttempt:${conversationId}:${generation.id || 'current'}:${choice}`;
+        let bookingAttempt = JSON.parse(localStorage.getItem(attemptKey) || 'null');
+        let bookingInFlight = false;
+        const showConfirmed = (bookingId = bookingAttempt?.bookingId) => {
+          btn.disabled = true;
+          const dashboardHref = bookingId
+            ? `dashboard.html?bookingId=${encodeURIComponent(bookingId)}`
+            : 'dashboard.html';
+          statusEl.innerHTML = `<div class="booking-confirmation"><div class="booking-confirmation-heading"><span class="badge confirmed">Prenotazione confermata</span></div><a class="booking-confirmation-link" href="${dashboardHref}">Apri prenotazione</a></div>`;
+        };
+        if (bookingAttempt?.confirmed) showConfirmed();
 
         btn.addEventListener('click', async () => {
-          if (!confirm(`Confermi la prenotazione dell'itinerario (${choice})?`)) return;
+          if (bookingInFlight || bookingAttempt?.confirmed) return;
+          const destination = option.flights?.outbound?.destinationAirport?.iataCode || option.hotel?.hotel?.name || 'selezionata';
+          const total = Number(option.totalCost || 0).toFixed(2);
+          if (!confirm(`Confermi la prenotazione per ${destination}, totale ${total} €? Prima della conferma verificheremo nuovamente prezzo e disponibilità.`)) return;
+          bookingInFlight = true;
           btn.disabled = true;
           statusEl.innerHTML = 'Elaborazione prenotazione transazionale in corso...';
           try {
-            const itinerary = await api('/itineraries', { method: 'POST', body: { conversationId, choice } });
-            const idempotencyKey = crypto.randomUUID();
+            if (!bookingAttempt) {
+              bookingAttempt = { idempotencyKey: crypto.randomUUID() };
+              localStorage.setItem(attemptKey, JSON.stringify(bookingAttempt));
+            }
+            if (!bookingAttempt.itineraryId) {
+              const itinerary = await api('/itineraries', { method: 'POST', body: { conversationId, choice } });
+              bookingAttempt.itineraryId = itinerary.id;
+              localStorage.setItem(attemptKey, JSON.stringify(bookingAttempt));
+            }
             const { booking } = await api('/bookings', {
               method: 'POST',
-              body: { itineraryId: itinerary.id, idempotencyKey, confirm: true },
+              body: { itineraryId: bookingAttempt.itineraryId, idempotencyKey: bookingAttempt.idempotencyKey, confirm: true },
             });
-            statusEl.innerHTML =
-              booking.status === 'confirmed'
-                ? `<span class="badge confirmed">Prenotazione confermata ✅</span> <a href="dashboard.html" style="margin-left:8px;">Vedi in Dashboard</a>`
-                : `<span class="badge failed">Prenotazione non andata a buon fine: ${booking.failureReason || ''}</span>`;
+            if (booking.status === 'confirmed') {
+              bookingAttempt.confirmed = true;
+              bookingAttempt.bookingId = booking.id;
+              localStorage.setItem(attemptKey, JSON.stringify(bookingAttempt));
+              showConfirmed(booking.id);
+            } else {
+              statusEl.textContent = `Prenotazione non andata a buon fine: ${booking.failureReason || booking.status}`;
+            }
           } catch (err) {
-            statusEl.innerHTML = `<span class="error">${err.message}</span>`;
+            const failedBooking = err.payload?.booking;
+            statusEl.textContent = failedBooking
+              ? `Prenotazione ${failedBooking.status || 'non confermata'}: ${failedBooking.failureReason || err.message}`
+              : err.message;
           } finally {
-            btn.disabled = false;
+            bookingInFlight = false;
+            btn.disabled = Boolean(bookingAttempt?.confirmed);
           }
         });
       });
     }
 
-    async function send() {
+    async function send({ retry = false } = {}) {
+      if (!initialized || sending || cooldownUntil > Date.now()) return;
       const input = document.getElementById('chat-input');
-      const text = input.value.trim();
+      const hasImage = preferenceImages.some((entry) => entry.status === 'uploaded' || entry.uploadPromise);
+      const text = input.value.trim() || (hasImage ? 'Vorrei usare questa immagine come ispirazione per il viaggio.' : '');
       if (!text) return;
-      appendMessage('user', text);
-      input.value = '';
-      document.getElementById('chat-error').textContent = '';
+      sending = true;
+      document.getElementById('send-btn').disabled = true;
+      document.getElementById('send-btn').textContent = 'Invio…';
+      setSendState('Richiesta in corso: attendo la risposta dell’assistente.');
+      generationVersion += 1;
+      clearTimeout(pollingTimer);
+      renderItinerary(null);
+      lastSentMessage = text;
+      setChatFeedback();
       try {
-        const data = await api(`/chat/conversations/${conversationId}/messages`, { method: 'POST', body: { message: text } });
-        appendMessage('assistant', data.reply);
-        if (data.itinerary) renderItinerary(data.itinerary);
+        const committedImages = await commitPendingImages();
+        if (!retry) appendMessage('user', text);
+        input.value = '';
+        const imageIds = [...committedImages, ...preferenceImages]
+          .filter((entry) => entry.status === 'uploaded' && entry.id)
+          .map((entry) => entry.id);
+        if (!retry) lastSentImageIds = imageIds;
+        const retryImageIds = retry ? lastSentImageIds : imageIds;
+        const previousRequirements = currentRequirements;
+        const data = await api(`/chat/conversations/${conversationId}/messages`, {
+          method: 'POST', body: { message: text, imageIds: retryImageIds },
+        });
+        renderOverlapWarning(data);
+        const requirementsChanged = Boolean(data.requirements)
+          && !requirementsMatch(data.requirements, previousRequirements);
+        const returnChangeIntent = /\b(?:torniamo|torno|tornare|ritorno|rientro|rientriamo|preferisco\s+tornare)\b/i.test(text)
+          && /\b(?:\d{1,2}\s*(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|january|february|march|april|may|june|july|august|september|october|november|december)|\d{1,2}[/-]\d{1,2})\b/i.test(text);
+        if (returnChangeIntent && !requirementsChanged) {
+          requirementCorrectionPending = true;
+          cooldownStorage()?.setItem(REQUIREMENT_CORRECTION_KEY(), '1');
+        } else if (requirementsChanged) {
+          requirementCorrectionPending = false;
+          cooldownStorage()?.removeItem(REQUIREMENT_CORRECTION_KEY());
+        }
+            if (!data.retryable && !(returnChangeIntent && !requirementsChanged)) {
+              const reply = data.phase === 'confirming' && data.requirements && (requirementsChanged || returnChangeIntent)
+                ? requirementsConfirmationMessage(data.requirements, data.reply) : data.reply;
+              appendMessage('assistant', reply);
+            }
+        if (returnChangeIntent && !requirementsChanged) {
+          appendMessage('assistant', 'Non ho aggiornato la data di ritorno: per evitare di generare l’itinerario con la durata precedente, indica una data riconosciuta e la riepilogherò prima della conferma.');
+        }
+        if (data.retryable) {
+          if (committedImages.length) updateVisionState(committedImages, data.code === 'GROQ_CIRCUIT_OPEN' ? 'deferred' : 'fallback');
+          const cooldownSeconds = Number(data.retryAfter || 0) || Number(data.retryAfterMs || 0) / 1000;
+          const imageNotice = committedImages.length
+            ? ` ${committedImages.length} ${committedImages.length === 1 ? 'immagine ricevuta' : 'immagini ricevute'}: l’analisi vision verrà ritentata insieme al messaggio.`
+            : '';
+          const retryMessage = cooldownSeconds > 0
+            ? providerCooldownMessage(cooldownSeconds)
+            : 'Il provider non ha indicato un tempo di attesa. Puoi riprovare ora.';
+          setChatFeedback(`${retryMessage}${imageNotice} il retry non partirà automaticamente.`, { retry: true, cooldownSeconds, cooldownKind: 'provider' });
+        } else if (committedImages.length) {
+          updateVisionState(committedImages, 'used_in_turn');
+        }
+        if (data.requirements && !requirementsMatch(data.requirements, currentRequirements)) {
+          currentRequirements = data.requirements;
+          clearGeneration();
+        }
+            if (data.generationReady && !requirementCorrectionPending) await startGeneration();
+        else if (data.generationReady && requirementCorrectionPending) {
+          appendMessage('assistant', 'La conferma resta in sospeso: modifica prima la data di ritorno, così aggiorno anche la durata del viaggio.');
+        }
+        else {
+          const savedJob = JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || 'null');
+          if (savedJob?.id) await pollGenerationJob(savedJob.id);
+        }
       } catch (err) {
-        document.getElementById('chat-error').textContent = err.message;
+        if (err.sessionExpired) return;
+        const failure = describeChatFailure(err);
+        setChatFeedback(failure.message, { retry: true, cooldownSeconds: failure.cooldownSeconds, cooldownKind: failure.cooldownKind });
+      } finally {
+        sending = false;
+        syncComposerAvailability();
+        document.getElementById('send-btn').textContent = 'Invia';
+        setSendState();
       }
     }
 
     document.getElementById('send-btn').addEventListener('click', send);
+    document.getElementById('new-chat-btn').addEventListener('click', startNewConversation);
+    document.getElementById('chat-overlap-edit').addEventListener('click', () => {
+      document.getElementById('chat-overlap-warning').hidden = true;
+      const input = document.getElementById('chat-input');
+      setSendState('Indica le nuove date nel messaggio, poi invialo per aggiornare la richiesta.');
+      input.focus();
+    });
+    document.getElementById('chat-overlap-continue').addEventListener('click', () => {
+      document.getElementById('chat-overlap-warning').hidden = true;
+    });
+    document.getElementById('chat-retry-btn').addEventListener('click', () => {
+      if (lastInitFailed) init();
+      else {
+        const input = document.getElementById('chat-input');
+        input.value = lastSentMessage;
+        send({ retry: true });
+      }
+    });
+    document.getElementById('generation-retry-btn').addEventListener('click', () => startGeneration());
+    document.getElementById('generation-edit-btn').addEventListener('click', () => {
+      document.getElementById('generation-status').hidden = true;
+      clearChatCooldown();
+      setChatFeedback();
+      setSendState('Modifica la richiesta nel campo messaggio, poi inviala per aggiornare l’itinerario.');
+      syncComposerAvailability();
+      document.getElementById('chat-input').focus();
+    });
+    document.addEventListener?.('visibilitychange', () => {
+      if (!document.hidden) renderCooldown();
+    });
     document.getElementById('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
 
+    function syncVisualViewport() {
+      if (typeof window === 'undefined' || !window.visualViewport) return;
+      document.documentElement.style.setProperty('--visual-viewport-height', `${Math.round(window.visualViewport.height)}px`);
+    }
+
+    syncVisualViewport();
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncVisualViewport);
+      window.visualViewport.addEventListener('scroll', syncVisualViewport);
+    }
+
     init();
+    initVoice();
   </script>
 </body>
 </html>

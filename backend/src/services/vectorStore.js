@@ -16,6 +16,14 @@ import path from 'path';
 import { pipeline } from '@xenova/transformers';
 import { prisma } from '../db/prisma.js';
 
+function normalizeLocation(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('it-IT')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 const INDEX_PATH = path.resolve('src/db/vector-index.json');
 
 let embedder = null;
@@ -51,7 +59,13 @@ export async function buildIndex() {
       id: a.id,
       type: 'activity',
       text: `${a.name} (${a.category}) a ${a.city}, ${a.country}. ${a.description} Target ideale: ${a.target}.`,
-      metadata: { name: a.name, category: a.category, city: a.city, country: a.country },
+      metadata: {
+        name: a.name,
+        category: a.category,
+        city: a.city,
+        country: a.country,
+        destinationId: a.destinationId,
+      },
     })),
     ...hotels.map((h) => ({
       id: h.id,
@@ -78,17 +92,42 @@ function loadIndex() {
 }
 
 /**
+ * Filtra il catalogo prima del ranking semantico e del limite topK.
+ * Il fallback sulla cittÃ  mantiene compatibili gli indici creati prima dei metadata
+ * destinationId, senza consentire risultati di altre cittÃ .
+ */
+export function filterRetrievalCandidates(documents, {
+  type, country, destinationId, destinationCity,
+} = {}) {
+  const countryKey = normalizeLocation(country);
+  const cityKey = normalizeLocation(destinationCity);
+  return documents.filter((document) => {
+    if (type && document.type !== type) return false;
+    if (country && normalizeLocation(document.metadata?.country) !== countryKey) return false;
+    if (!destinationId && !destinationCity) return true;
+    if (destinationId && document.metadata?.destinationId) {
+      return document.metadata.destinationId === destinationId;
+    }
+    return Boolean(cityKey && normalizeLocation(document.metadata?.city) === cityKey);
+  });
+}
+
+/**
  * Retrieval semantico: dato un testo libero (es. preferenze utente "relax e cultura in famiglia"),
  * ritorna i documenti più affini, opzionalmente filtrati per tipo/paese.
  */
-export async function semanticSearch(query, { type, country, topK = 5 } = {}) {
+export async function semanticSearch(query, {
+  type, country, destinationId, destinationCity, topK = 5,
+} = {}) {
   const index = loadIndex();
   if (index.length === 0) return [];
 
   const qVector = await embed(query);
-  let candidates = index;
-  if (type) candidates = candidates.filter((d) => d.type === type);
-  if (country) candidates = candidates.filter((d) => d.metadata.country?.toLowerCase() === country.toLowerCase());
+  // Apply all relational filters before ranking/topK so national results cannot crowd out
+  // local ones. destinationCity keeps old indexes usable until the next rebuild.
+  const candidates = filterRetrievalCandidates(index, {
+    type, country, destinationId, destinationCity,
+  });
 
   return candidates
     .map((d) => ({ ...d, score: cosineSim(qVector, d.vector) }))

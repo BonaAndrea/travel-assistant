@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -12,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U travel']
+      test: ['CMD-SHELL', 'pg_isready -U travel -d travel_assistant']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,13 +24,17 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql://travel:travel@postgres:5432/travel_assistant?schema=public
-      JWT_SECRET: change-me-in-production
+      NODE_ENV: development
       PORT: 4000
     ports:
       - '4000:4000'
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - preference_uploads:/app/uploads
+    # Dev/demo: applicare le migrazioni versionate prima del primo avvio con
+    # `docker compose run --rm backend npm run prisma:migrate:deploy`.
+    command: ["npm", "start"]
 
   frontend:
     image: nginx:alpine
@@ -43,3 +45,4 @@ services:
 
 volumes:
   pgdata:
+  preference_uploads:

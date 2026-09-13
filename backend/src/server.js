@@ -1,40 +1,32 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
-import authRoutes from './routes/auth.js';
-import chatRoutes from './routes/chat.js';
-import itineraryRoutes from './routes/itineraries.js';
-import bookingRoutes from './routes/bookings.js';
+import app from './app.js';
+import { itineraryJobService } from './services/itineraryJobService.js';
+import { prisma } from './db/prisma.js';
+import { closeConversationAdvisoryPool } from './services/conversationAdvisoryLock.js';
+import { validateEnvironment } from './config.js';
 
-const app = express();
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:8080',
-  credentials: true,
-}));
-app.use(express.json());
-app.use(cookieParser());
-
-// Logging essenziale, senza dati sensibili (no body/token loggati)
-app.use((req, _res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
-  next();
+const config = validateEnvironment();
+const server = app.listen(config.PORT, async () => {
+  console.log(`Backend in ascolto su http://localhost:${config.PORT}`);
+  try {
+    const resumed = await itineraryJobService.resumePending();
+    if (resumed > 0) console.log(`Ripresi ${resumed} job di generazione itinerario`);
+  } catch (error) {
+    console.error('Impossibile riprendere i job di generazione:', error.message);
+  }
 });
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
-
-app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/itineraries', itineraryRoutes);
-app.use('/api/bookings', bookingRoutes);
-
-// Gestione errori centralizzata
-app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err.message);
-  res.status(err.status || 500).json({
-    error: err.status ? err.message : 'Errore interno del server',
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Arresto graceful richiesto da ${signal}`);
+  const forceExit = setTimeout(() => process.exit(1), 10000);
+  forceExit.unref();
+  server.close(async () => {
+    await Promise.allSettled([prisma.$disconnect(), closeConversationAdvisoryPool()]);
+    clearTimeout(forceExit);
+    process.exit(0);
   });
-});
-
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Backend in ascolto su http://localhost:${PORT}`));
+}
+process.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+process.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });

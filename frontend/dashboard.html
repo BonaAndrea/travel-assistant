@@ -2,101 +2,404 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Assistant - Le mie prenotazioni</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="dashboard-page">
   <nav>
+    <a class="brand-lockup" href="chat.html" aria-label="Travel Assistant home"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c9.94 0 18 8.06 18 18S33.94 40 24 40 6 31.94 6 22 14.06 4 24 4Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m16 29 5-14 4 7 8-3-5 6-8 2-4 2Z" fill="currentColor"/></svg><span>Travel Assistant<small>Viaggia con intenzione</small></span></a>
     <a href="chat.html">Chat</a>
-    <a href="dashboard.html">Le mie prenotazioni</a>
+    <a href="history.html">Storico</a>
+    <a href="dashboard.html" aria-current="page">Le mie prenotazioni</a>
+    <label class="extras-switch" for="extra-toggle"><span>Extra</span><input id="extra-toggle" type="checkbox" role="switch" aria-label="Attiva funzioni extra" /><span class="extras-switch-track" aria-hidden="true"><span></span></span></label>
     <a href="#" id="logout-link">Esci</a>
   </nav>
+  <main>
+  <p class="page-kicker">Il tuo archivio</p>
   <h1>Le mie prenotazioni</h1>
-  <div id="loading">Caricamento...</div>
-  <div id="bookings"></div>
+  <p class="page-intro">Tieni sotto controllo i viaggi confermati e aggiorna una proposta quando vuoi cambiare direzione.</p>
+  <div id="loading" class="card loading-state" role="status">Caricamento delle prenotazioni...</div>
+  <div id="bookings" class="booking-layout">
+    <section class="booking-list-panel" aria-labelledby="booking-list-title">
+      <h2 id="booking-list-title" class="sr-only">Elenco prenotazioni</h2>
+      <div id="booking-list" class="booking-list" role="list"></div>
+    </section>
+     <section id="booking-detail" class="card booking-detail detail-drawer" aria-label="Dettaglio prenotazione" aria-live="polite" aria-labelledby="booking-detail-title" tabindex="-1">
+      <h2 id="booking-detail-title" class="sr-only">Dettaglio prenotazione</h2>
+      <p class="muted">Seleziona una prenotazione per visualizzarne il dettaglio.</p>
+    </section>
+  </div>
+  </main>
+  <dialog id="modify-dialog" class="modify-dialog" aria-labelledby="modify-title">
+    <form method="dialog" id="modify-form">
+      <button class="dialog-close secondary" value="cancel" aria-label="Chiudi">×</button>
+      <p class="eyebrow">Aggiorna il viaggio</p>
+      <h2 id="modify-title">Scegli un itinerario salvato</h2>
+      <p class="muted">Seleziona una bozza tra i tuoi itinerari. Il viaggio attuale resterà invariato finché non confermi.</p>
+      <label for="itinerary-select">Itinerario da collegare</label>
+      <select id="itinerary-select" required aria-describedby="modify-status">
+        <option value="">Caricamento itinerari...</option>
+      </select>
+      <p id="modify-status" class="modify-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="modify-cancel">Annulla</button>
+        <button type="submit" id="modify-confirm" disabled>Collega itinerario</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module">
     import { api, requireLogin, logout } from './api.js';
     requireLogin();
     document.getElementById('logout-link').addEventListener('click', logout);
 
-    async function load() {
-      const container = document.getElementById('bookings');
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str == null ? '' : String(str);
+      return div.innerHTML;
+    }
+
+    function safeHttpUrl(value) {
       try {
-        const bookings = await api('/bookings');
-        document.getElementById('loading').remove();
-        if (bookings.length === 0) {
-          container.innerHTML = '<p>Nessuna prenotazione ancora. Vai in chat per crearne una!</p>';
-          return;
-        }
-        container.innerHTML = bookings.map(b => {
-          const it = b.itinerary;
-          const det = it?.details;
-          return `
-          <div class="card">
-            <p>
-              <span class="badge ${b.status}">${b.status === 'confirmed' ? 'Confermata ✅' : b.status}</span>
-              <small style="color:#666; margin-left: 8px;">Prenotazione ID: ${b.id.slice(0, 8)}...</small>
-            </p>
-            <p><strong>Costo Totale:</strong> ${it.totalCost.toFixed(2)}€ <small style="color:#555;">(Voli: ${it.flightCost.toFixed(2)}€, Hotel: ${it.hotelCost.toFixed(2)}€, Attività: ${it.activityCost.toFixed(2)}€)</small></p>
-            ${det?.flights ? `
-              <p><strong>✈️ Voli:</strong><br/>
-              • Andata: ${det.flights.outbound.originAirport.iataCode} → ${det.flights.outbound.destinationAirport.iataCode} (${new Date(det.flights.outbound.date).toLocaleDateString('it-IT')})<br/>
-              • Ritorno: ${det.flights.inbound.originAirport.iataCode} → ${det.flights.inbound.destinationAirport.iataCode} (${new Date(det.flights.inbound.date).toLocaleDateString('it-IT')})
-              </p>
-            ` : ''}
-            ${det?.hotel ? `
-              <p><strong>🏨 Hotel:</strong> ${det.hotel.name} (${det.hotel.nights.length} notti)</p>
-            ` : ''}
-            ${det?.activities && det.activities.length ? `
-              <p><strong>🎟️ Attività (${det.activities.length}):</strong><br/>
-              ${det.activities.map(a => `• Giorno ${a.day}: ${a.name} (${a.cost.toFixed(2)}€)`).join('<br/>')}
-              </p>
-            ` : ''}
-            <p><small style="color:#777;">Data creazione: ${new Date(b.createdAt).toLocaleString('it-IT')}</small></p>
-            ${b.failureReason ? `<p class="error">Motivo fallimento: ${b.failureReason}</p>` : ''}
-            ${b.status === 'confirmed' ? `
-              <button data-action="cancel" data-id="${b.id}" class="secondary">Cancella prenotazione</button>
-              <button data-action="modify" data-id="${b.id}" class="secondary">Modifica itinerario</button>
-            ` : ''}
-            ${b.status === 'cancelled' && b.cancellationReason ? `<p><small>Motivo cancellazione: ${b.cancellationReason}</small></p>` : ''}
-          </div>
-        `;
-        }).join('');
-        container.querySelectorAll('[data-action="cancel"]').forEach(button => {
-          button.addEventListener('click', async () => {
-            if (!window.confirm('Cancellare la prenotazione e liberare le disponibilità?')) return;
-            button.disabled = true;
-            try {
-              await api(`/bookings/${button.dataset.id}`, { method: 'DELETE' });
-              await load();
-            } catch (err) {
-              window.alert(err.message);
-              button.disabled = false;
-            }
-          });
-        });
-        container.querySelectorAll('[data-action="modify"]').forEach(button => {
-          button.addEventListener('click', async () => {
-            const newItineraryId = window.prompt('Inserisci l\'ID del nuovo itinerario draft:');
-            if (!newItineraryId) return;
-            button.disabled = true;
-            try {
-              await api(`/bookings/${button.dataset.id}`, {
-                method: 'PATCH',
-                body: { newItineraryId },
-              });
-              await load();
-            } catch (err) {
-              window.alert(err.message);
-              button.disabled = false;
-            }
-          });
-        });
-      } catch (err) {
-        document.getElementById('loading').textContent = `Errore: ${err.message}`;
+        if (value == null || !String(value).trim()) return '';
+        const url = new URL(String(value), window.location.href);
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+      } catch {
+        return '';
       }
     }
+
+    function mediaMarkup(media, extraClass = '') {
+      const imageUrl = safeHttpUrl(media?.url);
+      if (!imageUrl) return '';
+      const sourceUrl = safeHttpUrl(media?.sourceUrl);
+      const licenseUrl = safeHttpUrl(media?.licenseUrl);
+      const credit = sourceUrl
+        ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(media?.author || 'Fonte')}</a>`
+        : escapeHtml(media?.author || 'Fonte non disponibile');
+      const license = licenseUrl
+        ? `<a href="${escapeHtml(licenseUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(media.license || 'Licenza')}</a>`
+        : escapeHtml(media?.license || 'Licenza non disponibile');
+      return `<figure class="media ${extraClass}">
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(media.alt)}" width="960" height="540" loading="lazy" decoding="async" />
+        <figcaption>Foto: ${credit} · ${license}</figcaption>
+      </figure>`;
+    }
+
+    let bookings = [];
+    let selectedBookingId = null;
+    const requestedBookingId = typeof window !== 'undefined' && typeof URLSearchParams !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('bookingId')
+      : null;
+    let detailTrigger = null;
+    let detailVisible = false;
+    const detailContainer = document.getElementById('booking-detail');
+
+    function isMobileDashboard() {
+      return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 800px)').matches;
+    }
+
+    function syncBookingDetailMode() {
+      const mobile = isMobileDashboard();
+      if (mobile && detailVisible) {
+        detailContainer.classList.add('is-open');
+        detailContainer.setAttribute('role', 'dialog');
+        detailContainer.setAttribute('aria-modal', 'true');
+        detailContainer.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('booking-detail-open');
+      } else if (!mobile && detailVisible) {
+        detailContainer.classList.remove('is-open');
+        detailContainer.removeAttribute('role');
+        detailContainer.removeAttribute('aria-modal');
+        detailContainer.setAttribute('aria-hidden', 'false');
+        document.body.classList.remove('booking-detail-open');
+      } else {
+        detailContainer.classList.remove('is-open');
+        detailContainer.removeAttribute('role');
+        detailContainer.removeAttribute('aria-modal');
+        detailContainer.setAttribute('aria-hidden', mobile ? 'true' : 'false');
+        document.body.classList.remove('booking-detail-open');
+      }
+    }
+
+    function closeBookingDetail() {
+      if (!detailVisible) return;
+      detailVisible = false;
+      syncBookingDetailMode();
+      if (detailTrigger && typeof detailTrigger.focus === 'function') detailTrigger.focus();
+    }
+
+    function createBookingDetailCloseButton() {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'booking-detail-close';
+      button.textContent = '×';
+      button.setAttribute('aria-label', 'Chiudi dettaglio prenotazione');
+      button.addEventListener('click', closeBookingDetail);
+      return button;
+    }
+
+    function statusLabel(status) {
+      return status === 'confirmed' ? 'Confermata' : status || 'Stato non disponibile';
+    }
+
+    function statusClass(status) {
+      return ['confirmed', 'pending', 'failed', 'partial_failed', 'cancelled'].includes(status) ? status : '';
+    }
+
+    function activityMarkup(activity) {
+      const mediaContent = mediaMarkup(activity.media, 'activity-media');
+      const media = mediaContent
+        ? `<div class="activity-media-slot">${mediaContent}</div>`
+        : '<div class="activity-media-slot"><span class="activity-media-placeholder">Immagine non disponibile</span></div>';
+      return `<li class="activity-item">${media}<div class="activity-copy"><strong>Giorno ${escapeHtml(activity.day)}: ${escapeHtml(activity.name)}</strong><span>${Number(activity.cost || 0).toFixed(2)}€</span></div></li>`;
+    }
+
+    function renderBookingCard(booking) {
+      const itinerary = booking.itinerary || {};
+      const details = itinerary.details || {};
+      const flight = details.flights?.outbound;
+      const destination = flight?.destinationAirport?.iataCode || 'Viaggio personalizzato';
+      const date = flight?.date ? new Date(flight.date).toLocaleDateString('it-IT') : 'Data da definire';
+      const total = Number(itinerary.totalCost || 0).toFixed(2);
+      const selected = booking.id === selectedBookingId;
+      return `
+        <article class="booking-card-item" role="listitem">
+          <button type="button" class="booking-card${selected ? ' is-selected' : ''}" data-booking-id="${escapeHtml(booking.id)}" aria-pressed="${selected}">
+            <span class="badge ${statusClass(booking.status)}">${escapeHtml(statusLabel(booking.status))}</span>
+            <strong>${escapeHtml(destination)}</strong>
+            <span class="booking-card-meta">${escapeHtml(date)} · ${total}€</span>
+            <span class="booking-card-hint">Apri dettaglio</span>
+          </button>
+        </article>`;
+    }
+
+    function renderBookingDetail(booking) {
+      const detail = document.getElementById('booking-detail');
+      if (!booking) {
+        detail.innerHTML = '<h2 id="booking-detail-title" class="sr-only">Dettaglio prenotazione</h2><p class="muted">Seleziona una prenotazione per visualizzarne il dettaglio.</p>';
+        return;
+      }
+      const itinerary = booking.itinerary || {};
+      const details = itinerary.details || {};
+      const outbound = details.flights?.outbound;
+      const inbound = details.flights?.inbound;
+      const activities = Array.isArray(details.activities) ? details.activities : [];
+      const actions = booking.status === 'confirmed'
+        ? `<div class="booking-detail-actions booking-actions detail-actions"><button data-action="cancel" data-id="${escapeHtml(booking.id)}" class="secondary">Cancella prenotazione</button><button data-action="modify" data-id="${escapeHtml(booking.id)}" data-itinerary-id="${escapeHtml(itinerary.id || '')}" class="secondary">Modifica itinerario</button></div>`
+        : '';
+      detail.innerHTML = `
+        <div class="booking-detail-header">
+          <div class="booking-detail-heading">
+            <h2 id="booking-detail-title">Dettaglio prenotazione</h2>
+            ${actions}
+          </div>
+        </div>
+        ${details.destinationMedia ? `<div class="booking-detail-media">${mediaMarkup(details.destinationMedia)}</div>` : ''}
+        <div class="booking-detail-content">
+          <p><span class="badge ${statusClass(booking.status)}">${escapeHtml(statusLabel(booking.status))}</span> <small class="booking-id">Prenotazione ID: ${escapeHtml(booking.id.slice(0, 8))}...</small></p>
+          <p><strong>Costo totale:</strong> ${Number(itinerary.totalCost || 0).toFixed(2)}€ <small class="cost-breakdown">(Voli: ${Number(itinerary.flightCost || 0).toFixed(2)}€, Hotel: ${Number(itinerary.hotelCost || 0).toFixed(2)}€, Attività: ${Number(itinerary.activityCost || 0).toFixed(2)}€)</small></p>
+          ${outbound ? `<p><strong>Voli:</strong><br/>Andata: ${escapeHtml(outbound.originAirport?.iataCode || '?')} → ${escapeHtml(outbound.destinationAirport?.iataCode || '?')} (${escapeHtml(new Date(outbound.date).toLocaleDateString('it-IT'))})${inbound ? `<br/>Ritorno: ${escapeHtml(inbound.originAirport?.iataCode || '?')} → ${escapeHtml(inbound.destinationAirport?.iataCode || '?')} (${escapeHtml(new Date(inbound.date).toLocaleDateString('it-IT'))})` : ''}</p>` : ''}
+          ${details.hotel ? `<p><strong>Hotel:</strong> ${escapeHtml(details.hotel.name)} (${escapeHtml(details.hotel.nights?.length || 0)} notti)</p>` : ''}
+          ${activities.length ? `<p><strong>Attività (${activities.length}):</strong></p><ul class="activity-list">${activities.map(activityMarkup).join('')}</ul>` : ''}
+          <p><small class="created-date">Data creazione: ${escapeHtml(new Date(booking.createdAt).toLocaleString('it-IT'))}</small></p>
+          <div class="booking-share-actions" aria-label="Condivisione prenotazione"><button type="button" class="secondary booking-share-copy" data-itinerary-id="${escapeHtml(itinerary.id || '')}">Copia link</button><button type="button" class="secondary booking-share-mock" data-network="WhatsApp">WhatsApp</button><button type="button" class="secondary booking-share-mock" data-network="Instagram">Instagram</button></div><p class="booking-share-status" role="status" aria-live="polite"></p>
+          ${booking.failureReason ? `<p class="error">Motivo fallimento: ${escapeHtml(booking.failureReason)}</p>` : ''}
+          ${booking.status === 'cancelled' && booking.cancellationReason ? `<p><small>Motivo cancellazione: ${escapeHtml(booking.cancellationReason)}</small></p>` : ''}
+        </div>
+      `;
+      detail.querySelector('.booking-detail-header')?.prepend(createBookingDetailCloseButton());
+      detail.querySelectorAll('.media img').forEach((image) => {
+        image.addEventListener('error', () => image.closest('.media')?.remove(), { once: true });
+      });
+      detail.querySelector('[data-action="cancel"]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        if (!window.confirm('Cancellare la prenotazione e liberare le disponibilità?')) return;
+        button.disabled = true;
+        try {
+          await api(`/bookings/${button.dataset.id}`, { method: 'DELETE' });
+          await load();
+        } catch (err) {
+          window.alert(err.message);
+          button.disabled = false;
+        }
+      });
+      const shareCopy = detail.querySelector('.booking-share-copy');
+      const shareStatus = detail.querySelector('.booking-share-status');
+      shareCopy?.addEventListener('click', async () => { try { const { token } = await api(`/share/itineraries/${encodeURIComponent(shareCopy.dataset.itineraryId)}`, { method: 'POST' }); await navigator.clipboard.writeText(`${window.location.origin}/share.html?token=${encodeURIComponent(token)}`); shareStatus.textContent = 'Link condivisibile copiato.'; } catch { shareStatus.textContent = 'Condivisione non disponibile.'; } });
+      detail.querySelectorAll('.booking-share-mock').forEach((button) => button.addEventListener('click', () => { shareStatus.textContent = `Anteprima ${button.dataset.network} pronta.`; }));
+      syncExtraShares();
+      detail.querySelector('[data-action="modify"]')?.addEventListener('click', (event) => openModifyDialog(event.currentTarget));
+    }
+
+    function selectBooking(id, { focus = false } = {}) {
+      const booking = bookings.find((item) => item.id === id);
+      if (!booking) return;
+      if (focus) detailTrigger = document.activeElement;
+      selectedBookingId = id;
+      detailVisible = true;
+      document.querySelectorAll('[data-booking-id]').forEach((button) => {
+        const isSelected = button.dataset.bookingId === id;
+        button.classList.toggle('is-selected', isSelected);
+        button.setAttribute('aria-pressed', String(isSelected));
+      });
+      renderBookingDetail(booking);
+      syncBookingDetailMode();
+      if (focus) {
+        if (isMobileDashboard()) detailContainer.querySelector('.booking-detail-close')?.focus();
+        else [...document.querySelectorAll('[data-booking-id]')]
+          .find((button) => button.dataset.bookingId === id)?.focus();
+      }
+    }
+
+    function renderBookingList() {
+      const list = document.getElementById('booking-list');
+      list.innerHTML = bookings.map(renderBookingCard).join('');
+      list.querySelectorAll('[data-booking-id]').forEach((button) => {
+        if (button.classList.contains('booking-share-copy') || button.classList.contains('booking-share-mock')) return;
+        button.addEventListener('click', () => selectBooking(button.dataset.bookingId, { focus: true }));
+      });
+    }
+
+    function syncExtraShares() { const enabled = localStorage.getItem('travelAssistantExtraFeaturesEnabled') === 'true'; document.querySelectorAll('.booking-share-actions').forEach((element) => { element.hidden = !enabled; }); }
+    const extraToggle = document.getElementById('extra-toggle');
+    extraToggle.checked = localStorage.getItem('travelAssistantExtraFeaturesEnabled') === 'true';
+    extraToggle.addEventListener('change', () => { localStorage.setItem('travelAssistantExtraFeaturesEnabled', String(extraToggle.checked)); syncExtraShares(); });
+
+    async function load() {
+      const list = document.getElementById('booking-list');
+      try {
+        bookings = await api('/bookings');
+        document.getElementById('loading')?.remove();
+        if (bookings.length === 0) {
+          selectedBookingId = null;
+          detailVisible = false;
+          list.innerHTML = '<p class="muted booking-empty">Nessuna prenotazione ancora. Vai in chat per crearne una!</p>';
+          renderBookingDetail(null);
+          syncBookingDetailMode();
+          return;
+        }
+        if (selectedBookingId && !bookings.some((booking) => booking.id === selectedBookingId)) {
+          selectedBookingId = null;
+          detailVisible = false;
+        }
+        if (!selectedBookingId && requestedBookingId && bookings.some((booking) => booking.id === requestedBookingId)) {
+          selectedBookingId = requestedBookingId;
+          detailVisible = true;
+        }
+        renderBookingList();
+        renderBookingDetail(selectedBookingId ? bookings.find((booking) => booking.id === selectedBookingId) : null);
+        syncBookingDetailMode();
+      } catch (err) {
+        let errorMessage = document.getElementById('loading');
+        if (!errorMessage) {
+          errorMessage = document.createElement('p');
+          errorMessage.id = 'loading';
+          errorMessage.className = 'error';
+          list.prepend(errorMessage);
+        }
+        errorMessage.textContent = `Errore: ${err.message}`;
+      }
+    }
+
+    const modifyDialog = document.getElementById('modify-dialog');
+    const modifyForm = document.getElementById('modify-form');
+    const itinerarySelect = document.getElementById('itinerary-select');
+    const modifyStatus = document.getElementById('modify-status');
+    const modifyConfirm = document.getElementById('modify-confirm');
+    let activeModifyButton = null;
+
+    function itineraryLabel(itinerary) {
+      const details = itinerary.details || {};
+      const flight = details.flights?.outbound;
+      const route = flight?.originAirport?.iataCode && flight?.destinationAirport?.iataCode
+        ? `${flight.originAirport.iataCode} → ${flight.destinationAirport.iataCode}` : 'Itinerario salvato';
+      const date = flight?.date ? new Date(flight.date).toLocaleDateString('it-IT') : 'Data da definire';
+      return `${route} · ${date} · ${Number(itinerary.totalCost || 0).toFixed(2)} €`;
+    }
+
+    async function openModifyDialog(button) {
+      activeModifyButton = button;
+      itinerarySelect.replaceChildren(new Option('Caricamento itinerari...', ''));
+      itinerarySelect.disabled = true;
+      modifyConfirm.disabled = true;
+      modifyStatus.className = 'modify-status';
+      modifyStatus.textContent = 'Cerco le tue bozze...';
+      modifyDialog.showModal();
+      document.getElementById('modify-cancel').focus();
+      try {
+        const page = await api('/chat/conversations?page=1&pageSize=50');
+        const details = await Promise.all((page.items || []).map((item) => api(`/chat/conversations/${encodeURIComponent(item.id)}`)));
+        const currentId = button.dataset.itineraryId;
+        const drafts = details.flatMap((conversation) => conversation.itineraries || [])
+          .filter((itinerary) => itinerary.status === 'draft' && itinerary.id !== currentId);
+        itinerarySelect.replaceChildren(new Option(
+          drafts.length ? 'Seleziona un itinerario...' : 'Nessuna bozza disponibile', '', true, true,
+        ));
+        drafts.forEach((itinerary) => itinerarySelect.add(new Option(itineraryLabel(itinerary), itinerary.id)));
+        itinerarySelect.disabled = drafts.length === 0;
+        modifyConfirm.disabled = !itinerarySelect.value;
+        modifyStatus.textContent = drafts.length ? `${drafts.length} itinerari disponibili.` : 'Crea prima una nuova proposta dalla chat.';
+      } catch (err) {
+        itinerarySelect.replaceChildren(new Option('Impossibile caricare gli itinerari', ''));
+        modifyStatus.className = 'modify-status error';
+        modifyStatus.textContent = `Errore: ${err.message}`;
+      }
+    }
+
+    itinerarySelect.addEventListener('change', () => { modifyConfirm.disabled = !itinerarySelect.value; });
+    modifyDialog.addEventListener('close', () => {
+      const bookingId = activeModifyButton?.dataset.id;
+      [...document.querySelectorAll('[data-booking-id]')]
+        .find((button) => button.dataset.bookingId === bookingId)?.focus();
+    });
+    document.getElementById('modify-cancel').addEventListener('click', () => modifyDialog.close());
+    modifyForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!activeModifyButton || !itinerarySelect.value) return;
+      modifyConfirm.disabled = true;
+      modifyStatus.className = 'modify-status';
+      modifyStatus.textContent = 'Collegamento in corso...';
+      try {
+        await api(`/bookings/${activeModifyButton.dataset.id}`, {
+          method: 'PATCH', body: { newItineraryId: itinerarySelect.value },
+        });
+        modifyDialog.close();
+        await load();
+      } catch (err) {
+        modifyStatus.className = 'modify-status error';
+        modifyStatus.textContent = `Collegamento non riuscito: ${err.message}`;
+        modifyConfirm.disabled = false;
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!detailContainer.classList.contains('is-open')) return;
+      if (modifyDialog?.open) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeBookingDetail();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...detailContainer.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+      if (!focusable.length) {
+        event.preventDefault();
+        detailContainer.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    window.addEventListener('resize', syncBookingDetailMode);
+    syncBookingDetailMode();
     load();
   </script>
 </body>

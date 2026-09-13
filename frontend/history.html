@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Travel Assistant - Storico conversazioni</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="history-page">
+  <nav>
+    <a class="brand-lockup" href="chat.html" aria-label="Travel Assistant home"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c9.94 0 18 8.06 18 18S33.94 40 24 40 6 31.94 6 22 14.06 4 24 4Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m16 29 5-14 4 7 8-3-5 6-8 2-4 2Z" fill="currentColor"/></svg><span>Travel Assistant<small>Viaggia con intenzione</small></span></a>
+    <a href="chat.html">Chat</a>
+    <a href="history.html" aria-current="page">Storico</a>
+    <a href="dashboard.html">Le mie prenotazioni</a>
+    <label class="extras-switch" for="extra-toggle"><span>Extra</span><input id="extra-toggle" type="checkbox" role="switch" aria-label="Attiva funzioni extra" /><span class="extras-switch-track" aria-hidden="true"><span></span></span></label>
+    <a href="#" id="logout-link">Esci</a>
+  </nav>
+
+  <main>
+  <p class="page-kicker">Le tue tracce</p>
+  <h1>Storico conversazioni</h1>
+  <p class="page-intro">Ritrova requisiti, messaggi e itinerari generati senza perdere il filo del viaggio.</p>
+  <p id="history-status" role="status">Caricamento...</p>
+
+  <div class="history-layout">
+    <section class="history-list-panel" aria-label="Elenco conversazioni" role="region">
+      <div id="conversation-list" role="list"></div>
+      <nav class="pagination" aria-label="Paginazione storico">
+        <button id="previous-page" class="secondary" type="button">Precedente</button>
+        <span id="page-label"></span>
+        <button id="next-page" class="secondary" type="button">Successiva</button>
+      </nav>
+    </section>
+    <section id="conversation-detail" class="card history-detail detail-drawer" aria-label="Dettaglio conversazione" aria-live="polite" tabindex="-1">
+      <p class="muted">Seleziona una conversazione per visualizzarne il dettaglio.</p>
+    </section>
+  </div>
+  </main>
+
+  <script>const et=document.getElementById('extra-toggle');et.checked=localStorage.getItem('travelAssistantExtraFeaturesEnabled')==='true';et.addEventListener('change',()=>localStorage.setItem('travelAssistantExtraFeaturesEnabled',String(et.checked)));</script><script type="module" src="history.js"></script>
+</body>
+</html>

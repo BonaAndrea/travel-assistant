@@ -1,11 +1,65 @@
 import { prisma } from '../db/prisma.js';
+import { invalidateSearchCache } from './searchCache.js';
 
 export class BookingLifecycleError extends Error {
-  constructor(message, status = 409) {
+  constructor(message, status = 409, code) {
     super(message);
     this.name = 'BookingLifecycleError';
     this.status = status;
+    this.code = code;
   }
+}
+
+function itineraryDateRange(details) {
+  const values = [
+    details?.flights?.outbound?.date,
+    details?.flights?.inbound?.date,
+    ...(details?.hotel?.nights || []),
+    ...(details?.activities || []).map((activity) => activity?.date),
+  ].filter(Boolean).map((value) => new Date(value)).filter((value) => !Number.isNaN(value.getTime()));
+  if (values.length === 0) return null;
+  return {
+    start: new Date(Math.min(...values.map((value) => value.getTime()))),
+    end: new Date(Math.max(...values.map((value) => value.getTime()))),
+  };
+}
+
+function rangesOverlap(left, right) {
+  return left.start <= right.end && right.start <= left.end;
+}
+
+export async function findConfirmedDateConflict(client, { userId, details, excludedBookingId, excludedItineraryId } = {}) {
+  const candidate = itineraryDateRange(details);
+  if (!candidate) return null;
+  const bookings = await client.booking.findMany({
+    where: {
+      userId,
+      status: 'confirmed',
+      ...(excludedItineraryId ? { itineraryId: { not: excludedItineraryId } } : {}),
+      ...(excludedBookingId ? { id: { not: excludedBookingId } } : {}),
+    },
+    include: { itinerary: { select: { details: true } } },
+  });
+  const conflict = bookings.find((booking) => {
+    const existing = itineraryDateRange(booking.itinerary?.details);
+    return existing && rangesOverlap(candidate, existing);
+  });
+  if (!conflict) return null;
+  return { booking: conflict, candidate, existing: itineraryDateRange(conflict.itinerary?.details) };
+}
+
+async function assertNoDateConflict(client, itinerary, excludedBookingId) {
+  const conflict = await findConfirmedDateConflict(client, {
+    userId: itinerary.userId,
+    details: itinerary.details,
+    excludedBookingId,
+    excludedItineraryId: itinerary.id,
+  });
+  if (conflict) throw new BookingLifecycleError(
+    'Le date dell’itinerario si sovrappongono a una prenotazione già confermata.',
+    409,
+    'ITINERARY_DATE_CONFLICT',
+  );
 }
 
 function bookingResourceDetails(itinerary) {
@@ -47,13 +101,20 @@ async function reserveResources(tx, itinerary) {
   }
 
   for (const activity of details.activities) {
-    const affected = await tx.$executeRaw`
-      UPDATE "ActivityAvailability"
-      SET booked = booked + ${details.participants}
-      WHERE "activityId" = ${activity.activityId}
-        AND date = ${new Date(activity.date)}
-        AND booked + ${details.participants} <= capacity
-    `;
+    const affected = activity.availabilityId
+      ? await tx.$executeRaw`
+        UPDATE "ActivityAvailability"
+        SET booked = booked + ${details.participants}
+        WHERE id = ${activity.availabilityId}
+          AND booked + ${details.participants} <= capacity
+      `
+      : await tx.$executeRaw`
+        UPDATE "ActivityAvailability"
+        SET booked = booked + ${details.participants}
+        WHERE "activityId" = ${activity.activityId}
+          AND date = ${new Date(activity.date)}
+          AND booked + ${details.participants} <= capacity
+      `;
     if (affected === 0) {
       throw new BookingLifecycleError(`Capacità non più disponibile per l'attività "${activity.name}"`);
     }
@@ -78,13 +139,20 @@ async function releaseResources(tx, itinerary) {
   }
 
   for (const activity of details.activities) {
-    const affected = await tx.$executeRaw`
-      UPDATE "ActivityAvailability"
-      SET booked = booked - ${details.participants}
-      WHERE "activityId" = ${activity.activityId}
-        AND date = ${new Date(activity.date)}
-        AND booked >= ${details.participants}
-    `;
+    const affected = activity.availabilityId
+      ? await tx.$executeRaw`
+        UPDATE "ActivityAvailability"
+        SET booked = booked - ${details.participants}
+        WHERE id = ${activity.availabilityId}
+          AND booked >= ${details.participants}
+      `
+      : await tx.$executeRaw`
+        UPDATE "ActivityAvailability"
+        SET booked = booked - ${details.participants}
+        WHERE "activityId" = ${activity.activityId}
+          AND date = ${new Date(activity.date)}
+          AND booked >= ${details.participants}
+      `;
     if (affected === 0) {
       throw new BookingLifecycleError(`Disponibilità attività non coerente per "${activity.name}"`, 500);
     }
@@ -102,26 +170,59 @@ async function releaseResources(tx, itinerary) {
  *   componente non è più disponibile, l'intera transazione viene annullata (rollback):
  *   l'utente non vede mai un itinerario "confermato" ma parzialmente prenotato.
  */
+function replayBooking(existing, userId, itineraryId) {
+  if (existing.userId !== userId || existing.itineraryId !== itineraryId) {
+    throw new BookingLifecycleError('Chiave di idempotenza già utilizzata per un’altra richiesta');
+  }
+  return {
+    booking: existing, alreadyProcessed: true,
+    ...(existing.status === 'failed' ? { error: existing.failureReason } : {}),
+  };
+}
+
+async function markConversationBooked(tx, itinerary) {
+  if (!itinerary.conversationId) return;
+  const snapshot = itinerary.details?.requirementsSnapshot;
+  // Update only the phase, preserving concurrent changes to the JSON state.
+  await tx.$executeRaw`
+    UPDATE "Conversation"
+    SET state = jsonb_set(state, '{phase}', '"booking_confirmed"'::jsonb),
+        "updatedAt" = NOW()
+    WHERE id = ${itinerary.conversationId}
+      AND "userId" = ${itinerary.userId}
+      AND state->>'phase' = 'itinerary_proposed'
+      AND (${snapshot === undefined} OR state->'requirements' = ${JSON.stringify(snapshot ?? null)}::jsonb)
+  `;
+}
+
 export async function confirmBooking({ userId, itineraryId, idempotencyKey }) {
   const existing = await prisma.booking.findUnique({ where: { idempotencyKey } });
   if (existing) {
-    return { booking: existing, alreadyProcessed: true };
+    return replayBooking(existing, userId, itineraryId);
   }
 
   const itinerary = await prisma.itinerary.findUnique({ where: { id: itineraryId } });
   if (!itinerary || itinerary.userId !== userId) {
-    throw new Error('Itinerario non trovato');
+    throw new BookingLifecycleError('Itinerario non trovato', 404);
   }
-  if (itinerary.status === 'confirmed') {
-    throw new Error('Itinerario già prenotato');
+  if (itinerary.status !== 'draft') {
+    const completed = await prisma.booking.findUnique({ where: { idempotencyKey } });
+    if (completed) return replayBooking(completed, userId, itineraryId);
+    throw new BookingLifecycleError(itinerary.status === 'confirmed'
+      ? 'Itinerario già prenotato' : 'Il nuovo itinerario deve essere in stato draft');
   }
 
-  const details = itinerary.details;
+  await assertNoDateConflict(prisma, itinerary);
 
   try {
     const booking = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.itinerary.updateMany({
+        where: { id: itineraryId, userId, status: 'draft' },
+        data: { status: 'confirmed' },
+      });
+      if (claimed.count !== 1) throw new BookingLifecycleError('Itinerario già prenotato');
       await reserveResources(tx, itinerary);
-      await tx.itinerary.update({ where: { id: itineraryId }, data: { status: 'confirmed' } });
+      await markConversationBooked(tx, itinerary);
 
       return tx.booking.create({
         data: {
@@ -133,19 +234,31 @@ export async function confirmBooking({ userId, itineraryId, idempotencyKey }) {
       });
     });
 
+    invalidateSearchCache();
     return { booking, alreadyProcessed: false };
   } catch (err) {
     // Rollback automatico della transazione: nessuna risorsa risulta scalata a metà.
     // Registriamo comunque un booking "failed" per tracciabilità (fuori dalla transazione fallita).
-    const failedBooking = await prisma.booking.create({
-      data: {
-        userId,
-        itineraryId,
-        status: 'failed',
-        idempotencyKey: `${idempotencyKey}-failed-${Date.now()}`,
-        failureReason: err.message,
-      },
-    });
+    const winner = await prisma.booking.findUnique({ where: { idempotencyKey } });
+    if (winner) return replayBooking(winner, userId, itineraryId);
+    if (err.code === 'ITINERARY_DATE_CONFLICT') throw err;
+    let failedBooking;
+    try {
+      failedBooking = await prisma.booking.create({
+        data: {
+          userId,
+          itineraryId,
+          status: 'failed',
+          idempotencyKey,
+          failureReason: err.message,
+        },
+      });
+    } catch (writeError) {
+      if (writeError.code !== 'P2002') throw writeError;
+      const concurrent = await prisma.booking.findUnique({ where: { idempotencyKey } });
+      if (!concurrent) throw writeError;
+      return replayBooking(concurrent, userId, itineraryId);
+    }
     return { booking: failedBooking, alreadyProcessed: false, error: err.message };
   }
 }
@@ -162,10 +275,9 @@ export async function cancelBooking({ userId, bookingId, reason = 'Cancellata da
       throw new BookingLifecycleError('È possibile cancellare solo una prenotazione confermata');
     }
 
-    return prisma.$transaction(async (tx) => {
-      await releaseResources(tx, booking.itinerary);
+    const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.booking.updateMany({
-        where: { id: bookingId, userId, status: 'confirmed' },
+        where: { id: bookingId, userId, status: 'confirmed', itineraryId: booking.itineraryId },
         data: {
           status: 'cancelled',
           cancelledAt: new Date(),
@@ -175,12 +287,15 @@ export async function cancelBooking({ userId, bookingId, reason = 'Cancellata da
       if (updated.count !== 1) {
         throw new BookingLifecycleError('La prenotazione è stata modificata da un\'altra operazione');
       }
+      await releaseResources(tx, booking.itinerary);
       await tx.itinerary.update({
         where: { id: booking.itineraryId },
         data: { status: 'cancelled' },
       });
       return tx.booking.findUnique({ where: { id: bookingId }, include: { itinerary: true } });
     });
+    invalidateSearchCache();
+    return result;
   }
 
 export async function modifyBooking({ userId, bookingId, newItineraryId }) {
@@ -208,16 +323,33 @@ export async function modifyBooking({ userId, bookingId, newItineraryId }) {
       throw new BookingLifecycleError('Il nuovo itinerario deve essere in stato draft');
     }
 
-    return prisma.$transaction(async (tx) => {
+    await assertNoDateConflict(prisma, newItinerary, bookingId);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Il confronto dello snapshot serializza modifica/cancellazione concorrenti.
+      const claimed = await tx.booking.updateMany({
+        where: { id: bookingId, userId, status: 'confirmed', itineraryId: booking.itineraryId },
+        data: { itineraryId: newItineraryId },
+      });
+      if (claimed.count !== 1) {
+        throw new BookingLifecycleError('La prenotazione è stata modificata da un’altra operazione');
+      }
+      const target = await tx.itinerary.updateMany({
+        where: { id: newItineraryId, userId, status: 'draft' },
+        data: { status: 'confirmed' },
+      });
+      if (target.count !== 1) throw new BookingLifecycleError('Il nuovo itinerario deve essere in stato draft');
       // Si libera prima il vecchio snapshot: in caso di errore il DB fa rollback completo.
       await releaseResources(tx, booking.itinerary);
       await reserveResources(tx, newItinerary);
+      await markConversationBooked(tx, newItinerary);
       await tx.itinerary.update({ where: { id: booking.itineraryId }, data: { status: 'cancelled' } });
-      await tx.itinerary.update({ where: { id: newItineraryId }, data: { status: 'confirmed' } });
       return tx.booking.update({
         where: { id: bookingId },
         data: { itineraryId: newItineraryId },
         include: { itinerary: true },
       });
     });
+    invalidateSearchCache();
+    return result;
 }

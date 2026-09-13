@@ -2,54 +2,139 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Assistant - Accedi</title>
   <link rel="stylesheet" href="style.css" />
+  <style>.auth-forms > h1 { display: none; }</style>
 </head>
-<body>
-  <h1>✈️ Travel Assistant</h1>
+<body class="auth-page-body">
+  <main class="auth-page">
+  <div class="auth-layout">
+    <section class="auth-visual" aria-label="Travel Assistant">
+      <a class="brand-lockup" href="index.html" aria-label="Travel Assistant home">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c9.94 0 18 8.06 18 18S33.94 40 24 40 6 31.94 6 22 14.06 4 24 4Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m16 29 5-14 4 7 8-3-5 6-8 2-4 2Z" fill="currentColor"/><path d="M24 40v4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>Travel Assistant<small>Viaggia con intenzione</small></span>
+      </a>
+      <div>
+        <p class="eyebrow">Il tuo prossimo capitolo</p>
+        <h1>Parti da un’idea.<br /><em>Arriva lontano.</em></h1>
+        <p>Un assistente di viaggio che ascolta il tuo modo di viaggiare e lo trasforma in un itinerario che ti somiglia.</p>
+      </div>
+      <div class="auth-stamp">Itinerari pensati per te</div>
+    </section>
+    <section class="auth-forms" aria-label="Accesso e registrazione">
+  <h1>Travel Assistant</h1>
 
-  <div class="card">
-    <h2>Accedi</h2>
-    <input id="login-email" placeholder="Email" type="email" />
-    <input id="login-password" placeholder="Password" type="password" />
+  <div class="auth-mode" role="group" aria-label="Modalità autenticazione">
+    <button id="show-login" class="auth-mode-btn is-active" type="button" aria-pressed="true" aria-controls="login-form">Accedi</button>
+    <button id="show-register" class="auth-mode-btn" type="button" aria-pressed="false" aria-controls="reg-form">Registrati</button>
+  </div>
+
+  <form id="login-form" class="card" novalidate aria-labelledby="login-title">
+    <h2 id="login-title">Accedi</h2>
+    <label for="login-email">Email</label>
+    <input id="login-email" name="email" placeholder="nome@esempio.it" type="email" autocomplete="email" required aria-describedby="login-error" aria-invalid="false" />
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" placeholder="La tua password" type="password" autocomplete="current-password" required minlength="6" aria-describedby="login-error" aria-invalid="false" />
     <button id="login-btn">Accedi</button>
-    <p id="login-error" class="error"></p>
-  </div>
+    <p id="login-error" class="error" role="alert" aria-live="assertive"></p>
+  </form>
 
-  <div class="card">
-    <h2>Registrati</h2>
-    <input id="reg-name" placeholder="Nome" />
-    <input id="reg-email" placeholder="Email" type="email" />
-    <input id="reg-password" placeholder="Password (min 6 caratteri)" type="password" />
+  <form id="reg-form" class="card" hidden novalidate aria-labelledby="reg-title">
+    <h2 id="reg-title">Registrati</h2>
+    <label for="reg-name">Nome</label>
+    <input id="reg-name" name="name" placeholder="Come ti chiami?" autocomplete="name" required aria-describedby="reg-error" aria-invalid="false" />
+    <label for="reg-email">Email</label>
+    <input id="reg-email" name="email" placeholder="nome@esempio.it" type="email" autocomplete="email" required aria-describedby="reg-error" aria-invalid="false" />
+    <label for="reg-password">Password</label>
+    <input id="reg-password" name="password" placeholder="Almeno 6 caratteri" type="password" autocomplete="new-password" required minlength="6" aria-describedby="reg-error" aria-invalid="false" />
     <button id="reg-btn">Registrati</button>
-    <p id="reg-error" class="error"></p>
+    <p id="reg-error" class="error" role="alert" aria-live="assertive"></p>
+  </form>
+
+    </section>
   </div>
+  </main>
 
   <script type="module">
     import { api } from './api.js';
 
-    document.getElementById('login-btn').addEventListener('click', async () => {
+    function setPending(form, pending) {
+      form.querySelector('button').disabled = pending;
+      form.toggleAttribute('aria-busy', pending);
+    }
+
+    function validate(form, errorId) {
+      const invalid = [...form.elements].find((field) => field instanceof HTMLInputElement && !field.checkValidity());
+      form.querySelectorAll('input').forEach((field) => field.setAttribute('aria-invalid', String(!field.checkValidity())));
+      if (invalid) {
+        document.getElementById(errorId).textContent = invalid.validationMessage;
+        invalid.focus();
+        return false;
+      }
+      return true;
+    }
+
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('reg-form');
+    const loginMode = document.getElementById('show-login');
+    const registerMode = document.getElementById('show-register');
+
+    if (new URLSearchParams(window.location.search).get('session') === 'expired') {
+      document.getElementById('login-error').textContent = 'La sessione è scaduta. Accedi di nuovo.';
+    }
+
+    function switchAuthMode(mode) {
+      const isLogin = mode === 'login';
+      loginForm.hidden = !isLogin;
+      registerForm.hidden = isLogin;
+      loginMode.classList.toggle('is-active', isLogin);
+      registerMode.classList.toggle('is-active', !isLogin);
+      loginMode.setAttribute('aria-pressed', String(isLogin));
+      registerMode.setAttribute('aria-pressed', String(!isLogin));
+      (isLogin ? document.getElementById('login-email') : document.getElementById('reg-name')).focus();
+    }
+
+    loginMode.addEventListener('click', () => switchAuthMode('login'));
+    registerMode.addEventListener('click', () => switchAuthMode('register'));
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!validate(form, 'login-error')) return;
       const email = document.getElementById('login-email').value;
       const password = document.getElementById('login-password').value;
+      setPending(form, true);
+      document.getElementById('login-error').textContent = 'Accesso in corso…';
       try {
         const { token } = await api('/auth/login', { method: 'POST', body: { email, password } });
         localStorage.setItem('token', token);
         window.location.href = 'chat.html';
       } catch (err) {
         document.getElementById('login-error').textContent = err.message;
+        document.getElementById('login-password').focus();
+      } finally {
+        setPending(form, false);
       }
     });
 
-    document.getElementById('reg-btn').addEventListener('click', async () => {
+    document.getElementById('reg-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!validate(form, 'reg-error')) return;
       const name = document.getElementById('reg-name').value;
       const email = document.getElementById('reg-email').value;
       const password = document.getElementById('reg-password').value;
+      setPending(form, true);
+      document.getElementById('reg-error').textContent = 'Creazione account in corso…';
       try {
         const { token } = await api('/auth/register', { method: 'POST', body: { name, email, password } });
         localStorage.setItem('token', token);
         window.location.href = 'chat.html';
       } catch (err) {
         document.getElementById('reg-error').textContent = err.message;
+      } finally {
+        setPending(form, false);
       }
     });
   </script>

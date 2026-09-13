@@ -11,5 +11,10 @@ describe('isConfirmationMessage', () => {
   test('non tratta messaggi non confermativi come conferma', () => {
     expect(isConfirmationMessage('voglio cambiare il budget')).toBe(false);
     expect(isConfirmationMessage('non va bene')).toBe(false);
+    expect(isConfirmationMessage('non confermo')).toBe(false);
+    expect(isConfirmationMessage('ok ma siamo 3')).toBe(false);
+    expect(isConfirmationMessage('si, cambio budget')).toBe(false);
+    expect(isConfirmationMessage('confermo?')).toBe(false);
+    expect(isConfirmationMessage('  CONFERMO! ')).toBe(true);
   });
 });

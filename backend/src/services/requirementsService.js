@@ -13,6 +13,85 @@ const REQUIRED_FIELDS = [
   'participants',
 ];
 
+const MONTHS_IT = [
+  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+];
+const MONTH_ALIASES = new Map([
+  ['january', 'gennaio'], ['february', 'febbraio'], ['march', 'marzo'], ['april', 'aprile'],
+  ['may', 'maggio'], ['june', 'giugno'], ['july', 'luglio'], ['august', 'agosto'],
+  ['september', 'settembre'], ['october', 'ottobre'], ['november', 'novembre'], ['december', 'dicembre'],
+]);
+
+export function normalizeTravelMonth(value) {
+  const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (!normalized) return null;
+  const token = normalized.match(/[a-z]+/g)?.find((word) => MONTHS_IT.includes(word) || MONTH_ALIASES.has(word));
+  return MONTHS_IT.includes(token) ? token : MONTH_ALIASES.get(token) || null;
+}
+
+function parseDayMonth(day, month, year = new Date().getUTCFullYear()) {
+  const monthName = normalizeTravelMonth(month);
+  const dayNumber = Number(day);
+  const monthIndex = MONTHS_IT.indexOf(monthName);
+  if (!monthName || !Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > 31) return null;
+  const date = new Date(Date.UTC(year, monthIndex, dayNumber));
+  return date.getUTCMonth() === monthIndex && date.getUTCDate() === dayNumber ? date : null;
+}
+
+/** Estrae un intervallo completo dichiarato dall'utente (partenza e ritorno). */
+export function extractExplicitTravelDates(value, referenceDate = new Date()) {
+  const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const monthPattern = [...MONTHS_IT, ...MONTH_ALIASES.keys()].join('|');
+  const named = text.match(new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?\\s*(?:-|–|—|a|al|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
+  if (named) {
+    const departure = parseDayMonth(named[1], named[2], named[3] || referenceDate.getUTCFullYear());
+    const returnYear = named[6] || named[3] || referenceDate.getUTCFullYear();
+    const returnDate = parseDayMonth(named[4], named[5], returnYear);
+    if (departure && returnDate) return { departure, returnDate };
+  }
+  const numeric = text.match(/(\d{1,2})[\/-](\d{1,2})(?:[\/-](20\d{2}))?\s*(?:-|–|—|a|al|fino\s+a)\s*(\d{1,2})[\/-](\d{1,2})(?:[\/-](20\d{2}))?/i);
+  if (!numeric) return null;
+  const departure = parseDayMonth(numeric[1], MONTHS_IT[Number(numeric[2]) - 1], numeric[3] || referenceDate.getUTCFullYear());
+  const returnDate = parseDayMonth(numeric[4], MONTHS_IT[Number(numeric[5]) - 1], numeric[6] || numeric[3] || referenceDate.getUTCFullYear());
+  return departure && returnDate ? { departure, returnDate } : null;
+}
+
+/** Estrae una durata dichiarata esplicitamente, distinguendola dai valori LLM. */
+export function extractExplicitDuration(value) {
+  const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const match = text.match(/(?:durata|vacanza|soggiorno|viaggio)[^0-9]{0,40}(\d{1,2})\s*giorni?/i)
+    || text.match(/\b(\d{1,2})\s*giorni?\b/i);
+  if (!match) return null;
+  const durationDays = Number(match[1]);
+  return Number.isInteger(durationDays) && durationDays > 0 && durationDays <= 60 ? durationDays : null;
+}
+
+/** Estrae solo date esplicitamente associate a ritorno/rientro, senza usare segnali vision. */
+export function extractExplicitReturnDate(value, referenceDate = new Date()) {
+  const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const monthPattern = [...MONTHS_IT, ...MONTH_ALIASES.keys()].join('|');
+  const intent = '(?:torniamo|torno|tornare|ritorno|rientro|rientrare|rientriamo|preferisco\\s+(?:tornare|rientrare))';
+  const named = text.match(new RegExp(`${intent}[^.!?\\n]{0,60}?(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
+  if (named) return parseDayMonth(named[1], named[2], named[3] || referenceDate.getUTCFullYear());
+  const numeric = text.match(new RegExp(`${intent}[^.!?\\n]{0,60}?(\\d{1,2})[\\/-](\\d{1,2})(?:[\\/-](20\\d{2}))?`, 'i'));
+  if (!numeric) return null;
+  return parseDayMonth(numeric[1], MONTHS_IT[Number(numeric[2]) - 1], numeric[3] || referenceDate.getUTCFullYear());
+}
+
+/** Cerca la data di partenza già dichiarata nello storico per ricalcolare la durata. */
+export function extractExplicitDepartureDate(history = [], referenceDate = new Date()) {
+  const text = history.filter((entry) => entry?.role === 'user').map((entry) => entry.content).join(' ')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const monthPattern = MONTHS_IT.join('|');
+  const named = text.match(new RegExp(`(?:partenza|partiamo|andiamo|dal|il)\\s+(\\d{1,2})\\s+(${monthPattern})`, 'i'));
+  const numeric = text.match(/(?:partenza|partiamo|dal|il)\s+(\d{1,2})[\/-](\d{1,2})/i);
+  if (named) return parseDayMonth(named[1], named[2], referenceDate.getUTCFullYear());
+  if (!numeric) return null;
+  const month = MONTHS_IT[Number(numeric[2]) - 1];
+  return parseDayMonth(numeric[1], month, referenceDate.getUTCFullYear());
+}
+
 export function getMissingFields(requirements) {
   return REQUIRED_FIELDS.filter((f) => {
     const v = requirements[f];

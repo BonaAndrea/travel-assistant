@@ -1,4 +1,46 @@
-import { getMissingFields, validateConsistency, isComplete } from '../src/services/requirementsService.js';
+import {
+  getMissingFields, validateConsistency, isComplete, normalizeTravelMonth,
+  extractExplicitReturnDate, extractExplicitDepartureDate, extractExplicitTravelDates,
+  extractExplicitDuration,
+} from '../src/services/requirementsService.js';
+
+test.each(['torniamo il 13 novembre', 'preferisco tornare il 13 novembre'])('estrae la data di ritorno da "%s"', (message) => {
+  expect(extractExplicitReturnDate(message, new Date(Date.UTC(2026, 0, 1)))).toEqual(new Date(Date.UTC(2026, 10, 13)));
+});
+
+test.each([
+  ['Torniamo il 6 dicembre', new Date(Date.UTC(2026, 11, 6))],
+  ['preferisco rientrare il 6 december', new Date(Date.UTC(2026, 11, 6))],
+  ['rientriamo il 06/12', new Date(Date.UTC(2026, 11, 6))],
+])('gestisce mesi, inglese e formati naturali per il ritorno: %s', (message, expected) => {
+  expect(extractExplicitReturnDate(message, new Date(Date.UTC(2026, 0, 1)))).toEqual(expected);
+});
+
+test('estrae la partenza dallo storico per ricalcolare la durata', () => {
+  expect(extractExplicitDepartureDate([
+    { role: 'user', content: 'Partiamo il 1 novembre' },
+  ], new Date(Date.UTC(2026, 0, 1)))).toEqual(new Date(Date.UTC(2026, 10, 1)));
+});
+
+test('estrae una durata dichiarata in italiano', () => {
+  expect(extractExplicitDuration('con una durata totale della vacanza di 5 giorni')).toBe(5);
+});
+
+test.each([
+  ['22 novembre - 6 dicembre 2026', 14],
+  ['22/11/2026 - 13/12/2026', 21],
+])('calcola una sola durata per intervallo esplicito: %s', (value, durationDays) => {
+  const dates = extractExplicitTravelDates(value, new Date(Date.UTC(2026, 0, 1)));
+  expect(dates).not.toBeNull();
+  expect(Math.round((dates.returnDate - dates.departure) / 86400000)).toBe(durationDays);
+});
+
+test('normalizza tutti i mesi italiani e le frasi naturali senza cambiare il significato', () => {
+  const months = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  expect(months.map((month) => normalizeTravelMonth(`Andiamo a ${month}`))).toEqual(months);
+  expect(normalizeTravelMonth('November')).toBe('novembre');
+  expect(normalizeTravelMonth('mese inventato')).toBeNull();
+});
 
 describe('getMissingFields', () => {
   test('rileva tutti i campi mancanti su oggetto vuoto', () => {

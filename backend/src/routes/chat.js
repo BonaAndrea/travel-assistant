@@ -1,10 +1,20 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { chatTurn } from '../services/llmService.js';
-import { getMissingFields, validateConsistency, isComplete } from '../services/requirementsService.js';
-import { generateItinerary } from '../services/itineraryService.js';
+import { CircuitOpenError, isTransientGroqError, llmErrorFields, logLlmEvent, retryAfterMsFromError } from '../services/llmResilience.js';
+import {
+  getMissingFields, validateConsistency, isComplete, normalizeTravelMonth,
+  extractExplicitReturnDate, extractExplicitDepartureDate, extractExplicitTravelDates, extractExplicitDuration,
+} from '../services/requirementsService.js';
+import { sameRequirements } from '../services/requirementsSnapshot.js';
+import { findConfirmedDateConflict } from '../services/bookingService.js';
+import { resolveDestinationReference } from '../services/locationNormalization.js';
+import { readPreferenceImage, removePreferenceImage, serializePreferenceImage } from '../services/preferenceImageService.js';
+import { chatMessageSchema, validationError } from '../validation.js';
+import { createConversationLockMiddleware } from '../middleware/conversationLock.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -21,6 +31,46 @@ const FIELD_LABELS = {
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const EMPTY_CONVERSATION_STATE = { phase: 'collecting', requirements: {} };
+
+function dateOverlapDestination(details) {
+  const snapshot = details?.requirementsSnapshot || {};
+  return snapshot.destinationCity || snapshot.country
+    || details?.flights?.outbound?.destinationAirport?.city
+    || 'destinazione non specificata';
+}
+
+async function getDateOverlapWarning(userId, requirements) {
+  const departure = new Date(requirements?.outboundDate);
+  const returnDate = new Date(requirements?.returnDate);
+  if (Number.isNaN(departure.getTime()) || Number.isNaN(returnDate.getTime()) || returnDate <= departure) return undefined;
+  try {
+    const conflict = await findConfirmedDateConflict(prisma, {
+      userId,
+      details: { flights: { outbound: { date: departure }, inbound: { date: returnDate } } },
+    });
+    if (!conflict) return undefined;
+    return {
+      code: 'ITINERARY_DATE_CONFLICT',
+      bookingId: conflict.booking.id,
+      dates: {
+        start: conflict.existing.start.toISOString(),
+        end: conflict.existing.end.toISOString(),
+      },
+      destination: dateOverlapDestination(conflict.booking.itinerary?.details),
+    };
+  } catch (error) {
+    // Il preflight è solo informativo: un errore DB non deve bloccare chat o generazione.
+    logLlmEvent('chat_overlap_preflight_failed', { error: error?.name || 'Error' });
+    return undefined;
+  }
+}
+
+function isConversationId(value) {
+  return UUID_PATTERN.test(String(value || ''));
+}
 
 function parsePositiveInteger(value, fallback) {
   if (value === undefined) return fallback;
@@ -46,17 +96,42 @@ export function isConfirmationMessage(message) {
   const normalized = String(message || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 
-  return /(?:^|\s)(?:si|conferma|confermo|ok|vai)(?:\s|$)/.test(normalized);
+  return /^(?:si|conferma|confermo|ok|vai)[.!]*$/.test(normalized);
 }
 
-// Crea una nuova conversazione
+// Prepara una sessione transitoria. La Conversation viene persistita solo dal
+// primo messaggio, così l'apertura della chat non finisce nello storico.
 router.post('/conversations', asyncHandler(async (req, res) => {
-  const conversation = await prisma.conversation.create({
-    data: { userId: req.userId, state: { phase: 'collecting', requirements: {} } },
+  res.status(201).json({ conversationId: randomUUID() });
+}));
+
+// Elimina una conversazione dell'utente autenticato, lasciando intatti eventuali
+// itinerari associati (la relazione è opzionale e viene posta a null).
+router.delete('/conversations/:id', asyncHandler(async (req, res) => {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: req.params.id, userId: req.userId },
+    select: { id: true },
   });
-  res.status(201).json({ conversationId: conversation.id });
+  if (!conversation) return res.status(404).json({ error: 'Conversazione non trovata' });
+
+  const images = await prisma.preferenceImage.findMany({
+    where: { conversationId: conversation.id, userId: req.userId },
+    select: { storageKey: true },
+  });
+
+  await prisma.$transaction([
+    prisma.message.deleteMany({ where: { conversationId: conversation.id } }),
+    prisma.itineraryGenerationJob.deleteMany({
+      where: { conversationId: conversation.id, userId: req.userId },
+    }),
+    prisma.preferenceImage.deleteMany({ where: { conversationId: conversation.id, userId: req.userId } }),
+    prisma.conversation.delete({ where: { id: conversation.id } }),
+  ]);
+  await Promise.all(images.map(({ storageKey }) => removePreferenceImage(storageKey)));
+  res.status(204).send();
 }));
 
 // Elenco cronologico, paginato e sempre filtrato sull'utente autenticato.
@@ -67,7 +142,7 @@ router.get('/conversations', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'page e pageSize devono essere interi positivi' });
   }
   const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE);
-  const where = { userId: req.userId };
+  const where = { userId: req.userId, messages: { some: {} } };
   const [totalItems, conversations] = await prisma.$transaction([
     prisma.conversation.count({ where }),
     prisma.conversation.findMany({
@@ -82,6 +157,7 @@ router.get('/conversations', asyncHandler(async (req, res) => {
         updatedAt: true,
         _count: { select: { messages: true, itineraries: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { role: true, content: true, createdAt: true } },
+        preferenceImages: { orderBy: { createdAt: 'asc' }, select: { id: true, mimeType: true, sizeBytes: true, analysisStatus: true, description: true, tags: true, createdAt: true } },
         itineraries: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, totalCost: true } },
       },
     }),
@@ -100,6 +176,7 @@ router.get('/conversations', asyncHandler(async (req, res) => {
         messageCount: conversation._count.messages,
         itineraryCount: conversation._count.itineraries,
         lastMessage: conversation.messages[0] || null,
+        preferenceImageCount: conversation.preferenceImages?.length || 0,
         latestItinerary: conversation.itineraries[0] || null,
       };
     }),
@@ -114,64 +191,233 @@ router.get('/conversations', asyncHandler(async (req, res) => {
   });
 }));
 
-// Invia un messaggio in una conversazione esistente
-router.post('/conversations/:id/messages', asyncHandler(async (req, res) => {
+// Invia il primo messaggio creando la Conversation nella stessa transazione.
+router.post('/conversations/:id/messages', createConversationLockMiddleware(), asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { message } = req.body;
-  if (!message || typeof message !== 'string') {
-    return res.status(400).json({ error: 'Campo "message" mancante' });
-  }
+  const parsedMessage = chatMessageSchema.safeParse(req.body);
+  if (!parsedMessage.success) return res.status(400).json(validationError('Campo "message" non valido', parsedMessage.error));
+  const { imageIds } = parsedMessage.data;
+  const message = parsedMessage.data.message?.trim()
+    || (imageIds.length > 0 ? 'Vorrei usare questa immagine come ispirazione per il viaggio.' : '');
+  if (!message) return res.status(400).json(validationError('Campo "message" non valido'));
 
-  const conversation = await prisma.conversation.findUnique({
-    where: { id },
-    include: { messages: { orderBy: { createdAt: 'asc' } } },
+  const persisted = await prisma.$transaction(async (tx) => {
+    const existing = await tx.conversation.findUnique({
+      where: { id },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+        preferenceImages: { orderBy: { createdAt: 'asc' }, select: { id: true, mimeType: true, sizeBytes: true, analysisStatus: true, description: true, tags: true, createdAt: true } },
+      },
+    });
+
+    if (existing) {
+      if (existing.userId !== req.userId) return { conversation: existing, authorized: false };
+      await tx.message.create({ data: { conversationId: id, role: 'user', content: message } });
+      return { conversation: existing, authorized: true };
+    }
+
+    // Solo gli UUID emessi dal POST transitorio possono materializzare una
+    // nuova conversazione; gli ID legacy inesistenti restano 404.
+    if (!isConversationId(id)) return { conversation: null, authorized: false };
+
+    const created = await tx.conversation.create({
+      data: { id, userId: req.userId, state: EMPTY_CONVERSATION_STATE },
+    });
+    await tx.message.create({ data: { conversationId: id, role: 'user', content: message } });
+    return { conversation: { ...created, messages: [], preferenceImages: [] }, authorized: true };
   });
-  if (!conversation || conversation.userId !== req.userId) {
+
+  if (!persisted.authorized) {
     return res.status(404).json({ error: 'Conversazione non trovata' });
   }
 
-  await prisma.message.create({ data: { conversationId: id, role: 'user', content: message } });
+  const conversation = persisted.conversation;
 
-  const state = conversation.state;
+  // I dati legacy possono avere uno stato nullo o non conforme: il recupero
+  // deve mantenere la stessa normalizzazione usata dallo storico.
+  const state = normalizeConversationState(conversation.state);
   const history = conversation.messages.map((m) => ({ role: m.role, content: m.content }));
+  const preferenceImages = conversation.preferenceImages || [];
   history.push({ role: 'user', content: message });
+  const uniqueImageIds = [...new Set(imageIds)];
+  let imageAttachments = [];
+  if (uniqueImageIds.length > 0) {
+    const images = await prisma.preferenceImage.findMany({
+      where: { id: { in: uniqueImageIds }, conversationId: id, userId: req.userId },
+      select: { id: true, storageKey: true, mimeType: true },
+    });
+    if (images.length !== uniqueImageIds.length) {
+      return res.status(404).json({ code: 'IMAGE_ATTACHMENT_NOT_FOUND', error: 'Immagine allegata non trovata' });
+    }
+    try {
+      imageAttachments = await Promise.all(images.map(async (image) => ({
+        id: image.id,
+        mimeType: image.mimeType,
+        buffer: await readPreferenceImage(image.storageKey),
+      })));
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return res.status(410).json({ code: 'IMAGE_ATTACHMENT_UNAVAILABLE', error: 'Immagine allegata non disponibile' });
+      }
+      throw error;
+    }
+  }
 
-  console.log('DEBUG confirm check', { phase: state.phase, message, normalized: isConfirmationMessage(message) });
-
-  // Fase speciale: l'utente sta confermando la generazione dell'itinerario
+  // Fase speciale: l'utente sta confermando la generazione dell’itinerario
   if (state.phase === 'confirming' && isConfirmationMessage(message)) {
-    const result = await generateItinerary(state.requirements);
-    state.phase = result.error ? 'confirming' : 'itinerary_proposed'; // errore -> resta in fase di modifica requisiti
-    state.lastResult = result;
-    await prisma.conversation.update({ where: { id }, data: { state } });
-
-    const reply = result.error
-      ? `Non sono riuscito a comporre un itinerario: ${result.error} Vuoi modificare qualche requisito?`
-      : result.primary?.withinBudget
-        ? 'Ecco l\'itinerario proposto, entro il tuo budget. Vuoi procedere con la prenotazione?'
-        : result.alternative
-          ? 'Non è stato possibile rispettare tutti i vincoli col budget indicato: ti propongo un\'alternativa con alcuni compromessi (vedi dettagli). Vuoi procedere con quella?'
-          : 'Non sono riuscito a comporre un itinerario compatibile con i criteri indicati. Vuoi modificare budget, mese o destinazione?';
-
+    if (state.generationIssue) {
+      const issue = state.generationIssue;
+      const alternatives = Array.isArray(issue.alternatives) && issue.alternatives.length > 0
+        ? ` Alternative disponibili nel catalogo: ${issue.alternatives.map((alternative) =>
+          alternative?.availableReturnDate?.slice?.(0, 10) || alternative?.date?.slice?.(0, 10) || alternative?.city,
+        ).filter(Boolean).join(', ')}.`
+        : '';
+      const reply = `${issue.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (date, durata, aeroporto, budget o preferenze), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
+      await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
+      return res.json({ reply, phase: state.phase, generationReady: false, generationIssue: issue });
+    }
+    if (prisma.destination?.findMany && !(await resolveDestinationReference(prisma, state.requirements.country))) {
+      const supportedDestinations = await prisma.destination.findMany({
+        select: { city: true, country: true },
+        orderBy: { city: 'asc' },
+        take: 8,
+      });
+      const alternatives = supportedDestinations.map(({ city, country }) => city || country)
+        .filter(Boolean).join(', ');
+      const alternativeHint = alternatives ? ` Alternative disponibili: ${alternatives}.` : '';
+      const reply = `La destinazione "${state.requirements.country || 'indicata'}" non è riconosciuta dal catalogo. Scegli una città o un paese supportato prima di generare l’itinerario.${alternativeHint}`;
+      await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
+      return res.json({ reply, phase: state.phase, generationReady: false, requirements: state.requirements });
+    }
+    const reply = 'Perfetto: avvio la generazione dell’itinerario. Puoi seguire l’avanzamento qui sotto.';
     await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
-    return res.json({ reply, phase: state.phase, itinerary: result });
+    const overlapWarning = await getDateOverlapWarning(req.userId, state.requirements);
+    return res.json({
+      reply,
+      phase: state.phase,
+      generationReady: true,
+      requirements: state.requirements,
+      ...(overlapWarning ? { overlapWarning } : {}),
+      nextAction: {
+        type: 'start_itinerary_generation',
+        method: 'POST',
+        path: '/api/itinerary-jobs',
+        conversationId: id,
+        requiresIdempotencyKey: true,
+      },
+    });
   }
 
   // Fase normale: raccolta/aggiornamento requisiti via LLM
-  const { assistantMessage, updatedFields } = await chatTurn(history, state.requirements, state.phase);
-  state.requirements = { ...state.requirements, ...updatedFields };
+  let turn;
+  try {
+    if (uniqueImageIds.length > 0) {
+      turn = state.generationIssue
+        ? await chatTurn(history, state.requirements, state.phase, preferenceImages, imageAttachments, state.generationIssue)
+        : await chatTurn(history, state.requirements, state.phase, preferenceImages, imageAttachments);
+    } else {
+      turn = state.generationIssue
+        ? await chatTurn(history, state.requirements, state.phase, preferenceImages, [], state.generationIssue)
+        : await chatTurn(history, state.requirements, state.phase, preferenceImages);
+    }
+  } catch (error) {
+    logLlmEvent('llm_conversational_fallback', {
+      ...llmErrorFields(error),
+    });
+    const retryAfterMs = error instanceof CircuitOpenError
+      ? error.retryAfterMs
+      : (isTransientGroqError(error) ? (retryAfterMsFromError(error) || 1000) : undefined);
+    if (Number.isFinite(retryAfterMs)) res.set('Retry-After', String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+    const cooldown = error instanceof CircuitOpenError;
+    const reply = 'Il servizio di assistenza è temporaneamente indisponibile. I dati del viaggio sono rimasti invariati: riprova tra poco per aggiornarli.';
+    await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
+    return res.json({ code: cooldown ? error.code : (error?.status === 429 ? 'GROQ_RATE_LIMITED' : 'GROQ_PROVIDER_UNAVAILABLE'), reply: cooldown
+      ? 'Il servizio di assistenza è in pausa per un breve cooldown. Riprova tra poco.' : reply,
+      phase: state.phase, requirements: state.requirements,
+      missing: getMissingFields(state.requirements), issues: validateConsistency(state.requirements),
+      retryable: true, ...(Number.isFinite(retryAfterMs) ? { retryAfterMs } : {}) });
+  }
+  const { assistantMessage, updatedFields } = turn;
+  const normalizedFields = { ...updatedFields };
+  if (Object.hasOwn(normalizedFields, 'travelMonth')) {
+    const month = normalizeTravelMonth(normalizedFields.travelMonth);
+    if (month) normalizedFields.travelMonth = month;
+    else delete normalizedFields.travelMonth;
+  }
+  const explicitTravelDates = extractExplicitTravelDates(message);
+  const explicitDuration = extractExplicitDuration(message);
+  let dateDurationConflict = false;
+  if (explicitTravelDates && explicitTravelDates.returnDate > explicitTravelDates.departure) {
+    normalizedFields.outboundDate = explicitTravelDates.departure.toISOString();
+    normalizedFields.returnDate = explicitTravelDates.returnDate.toISOString();
+    normalizedFields.durationDays = Math.round(
+      (explicitTravelDates.returnDate.getTime() - explicitTravelDates.departure.getTime()) / 86400000,
+    );
+    normalizedFields.travelMonth = normalizeTravelMonth(
+      explicitTravelDates.departure.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }),
+    );
+  } else {
+    const explicitReturnDate = extractExplicitReturnDate(message);
+    if (!explicitReturnDate) {
+      // Nessuna data esplicita: i campi estratti dal modello restano invariati.
+    } else {
+    const departureDate = normalizedFields.outboundDate
+      || state.requirements.outboundDate
+      || extractExplicitDepartureDate(history.slice(0, -1));
+    let returnDate = explicitReturnDate;
+    const departure = departureDate ? new Date(departureDate) : null;
+    if (departure && !Number.isNaN(departure.getTime()) && returnDate <= departure
+      && returnDate.getUTCMonth() < departure.getUTCMonth()) {
+      // Un mese numericamente precedente indica il rientro nell'anno seguente
+      // (es. partenza dicembre, rientro gennaio).
+      returnDate = new Date(returnDate);
+      returnDate.setUTCFullYear(returnDate.getUTCFullYear() + 1);
+    }
+    const validAfterDeparture = !departure || Number.isNaN(departure.getTime()) || returnDate > departure;
+    if (validAfterDeparture) normalizedFields.returnDate = returnDate.toISOString();
+    if (validAfterDeparture && departure) {
+      const durationDays = Math.round((returnDate.getTime() - departure.getTime()) / 86400000);
+      if (Number.isFinite(durationDays) && durationDays > 0) {
+        normalizedFields.outboundDate = departure.toISOString();
+        normalizedFields.durationDays = durationDays;
+      }
+    }
+    }
+  }
+  if (explicitDuration) {
+    const departureDate = normalizedFields.outboundDate || state.requirements.outboundDate
+      || extractExplicitDepartureDate(history.slice(0, -1));
+    const returnDate = normalizedFields.returnDate || state.requirements.returnDate;
+    normalizedFields.durationDays = explicitDuration;
+    if (departureDate && returnDate) {
+      const calendarDuration = Math.round((new Date(returnDate).getTime() - new Date(departureDate).getTime()) / 86400000);
+      dateDurationConflict = calendarDuration !== explicitDuration;
+    }
+  }
+  const requirements = { ...state.requirements, ...normalizedFields };
+  if (!sameRequirements(state.requirements, requirements)) delete state.lastResult;
+  if (Object.keys(normalizedFields).length > 0) delete state.generationIssue;
+  state.requirements = requirements;
+  state.phase = 'collecting';
 
   const missing = getMissingFields(state.requirements);
   const issues = validateConsistency(state.requirements);
+  const overlapWarning = await getDateOverlapWarning(req.userId, state.requirements);
 
   let reply = assistantMessage;
   if (missing.length > 0 && !reply?.trim()) {
     reply = `Mi mancano ancora: ${missing.map((f) => FIELD_LABELS[f]).join(', ')}. Puoi indicarmeli?`;
-  } else if (issues.length > 0 && !reply?.trim()) {
+  } else if (issues.length > 0) {
+    // Il modello può dichiararsi pronto anche quando i vincoli deterministici
+    // tengono la conversazione in collecting. Non lasciare un messaggio che
+    // inviti alla conferma, altrimenti i successivi "sì" entrano in un loop.
     reply = issues.join(' ');
   }
 
-  if (isComplete(state.requirements) && missing.length === 0 && issues.length === 0) {
+  if (dateDurationConflict) {
+    state.phase = 'collecting';
+    reply = 'La durata indicata non coincide con le date di partenza e ritorno. Conferma quale dato devo correggere: le date oppure il numero di giorni.';
+  } else if (isComplete(state.requirements) && missing.length === 0 && issues.length === 0) {
     state.phase = 'confirming';
     if (!reply?.trim()) {
       reply = `Tutti i dati sono completi!\n\n` +
@@ -190,7 +436,8 @@ router.post('/conversations/:id/messages', asyncHandler(async (req, res) => {
   await prisma.conversation.update({ where: { id }, data: { state } });
   await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
 
-  res.json({ reply, phase: state.phase, requirements: state.requirements, missing, issues });
+  res.json({ reply, phase: state.phase, requirements: state.requirements, missing, issues,
+    ...(overlapWarning ? { overlapWarning } : {}) });
 }));
 
 router.get('/conversations/:id', asyncHandler(async (req, res) => {
@@ -198,14 +445,38 @@ router.get('/conversations/:id', asyncHandler(async (req, res) => {
     where: { id: req.params.id, userId: req.userId },
     include: {
       messages: { orderBy: { createdAt: 'asc' } },
+      preferenceImages: { orderBy: { createdAt: 'asc' }, select: { id: true, conversationId: true, originalName: true, mimeType: true, sizeBytes: true, analysisStatus: true, description: true, tags: true, createdAt: true } },
       itineraries: { orderBy: { createdAt: 'desc' } },
     },
   });
   if (!conversation) {
+    // Gli ID restituiti dal POST iniziale sono transitori e non hanno ancora
+    // una riga DB. Restituiamo lo stato vuoto senza materializzarlo.
+    if (isConversationId(req.params.id)) {
+      return res.json({
+        id: req.params.id,
+        state: EMPTY_CONVERSATION_STATE,
+        status: EMPTY_CONVERSATION_STATE.phase,
+        createdAt: null,
+        updatedAt: null,
+        messages: [],
+        preferenceImages: [],
+        itineraries: [],
+      });
+    }
     return res.status(404).json({ error: 'Conversazione non trovata' });
   }
   const state = normalizeConversationState(conversation.state);
-  res.json({ ...conversation, state, status: state.phase });
+  res.json({
+    id: conversation.id,
+    state,
+    status: state.phase,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    messages: conversation.messages,
+    preferenceImages: (conversation.preferenceImages || []).map(serializePreferenceImage),
+    itineraries: conversation.itineraries,
+  });
 }));
 
 export default router;

@@ -1,8 +1,22 @@
 import { monthToDateRange, optimizeActivitySelection } from '../src/services/itineraryService.js';
+import { normalizeLocation } from '../src/services/locationNormalization.js';
+
+describe('normalizzazione riferimenti geografici', () => {
+  test('ignora accenti, maiuscole, spazi e punteggiatura', () => {
+    expect(normalizeLocation('  Città  del-Messico ')).toBe('cittadelmessico');
+    expect(normalizeLocation('CITTA del messico')).toBe('cittadelmessico');
+  });
+});
 
 describe('monthToDateRange', () => {
   test('mese non riconosciuto ritorna null', () => {
     expect(monthToDateRange('mesefinto')).toBeNull();
+  });
+
+  test('normalizza novembre italiano e alias inglese', () => {
+    const reference = new Date(Date.UTC(2026, 0, 15));
+    expect(monthToDateRange('novembre', reference).start.getUTCMonth()).toBe(10);
+    expect(monthToDateRange('November', reference).start.getUTCMonth()).toBe(10);
   });
 
   const candidate = (id, score, category, cost, preferenceIndexes = [0], booked = 0, capacity = 2) => ({
@@ -76,6 +90,40 @@ describe('monthToDateRange', () => {
       });
 
       expect(result.chosen.map((item) => item.category).sort()).toEqual(['cultura', 'relax']);
+    });
+
+    test('seleziona piÃ¹ fasce nello stesso giorno senza sovrapposizioni e senza superare il budget', () => {
+      const result = optimizeActivitySelection({
+        days: 1,
+        participants: 1,
+        budgetRemaining: 15,
+        candidatesByDate: [{
+          date: '2026-10-01',
+          candidates: [
+            { ...candidate('morning', 1, 'cultura', 8), availability: { cost: 8, booked: 0, capacity: 2, startMinute: 9 * 60, endMinute: 11 * 60 } },
+            { ...candidate('overlap', 1.2, 'relax', 1), availability: { cost: 1, booked: 0, capacity: 2, startMinute: 10 * 60, endMinute: 12 * 60 } },
+            { ...candidate('afternoon', 0.9, 'sport', 7), availability: { cost: 7, booked: 0, capacity: 2, startMinute: 11 * 60, endMinute: 13 * 60 } },
+          ],
+        }],
+      });
+
+      expect(result.chosen.map((item) => item.activityId)).toEqual(['morning', 'afternoon']);
+      expect(result.cost).toBe(15);
+      expect(result.chosen[0].endMinute).toBeLessThanOrEqual(result.chosen[1].startMinute);
+      expect(result.timedOut).toBe(false);
+    });
+
+    test('espone il superamento del limite temporale del solver', () => {
+      const result = optimizeActivitySelection({
+        days: 2,
+        participants: 1,
+        budgetRemaining: 100,
+        timeLimitMs: 0,
+        candidatesByDate: [{ date: '2026-10-01', candidates: [] }, { date: '2026-10-02', candidates: [] }],
+      });
+
+      expect(result.timedOut).toBe(true);
+      expect(result.chosen).toHaveLength(0);
     });
   });
 

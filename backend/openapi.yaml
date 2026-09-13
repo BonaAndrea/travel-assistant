@@ -12,16 +12,106 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    metricsBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: exporter-token
   schemas:
     Error:
       type: object
       properties:
         error: { type: string }
+    RateLimitError:
+      type: object
+      required: [error, code, retryAfter]
+      properties:
+        error: { type: string }
+        code: { type: string, enum: [AUTH_RATE_LIMITED] }
+        retryAfter: { type: integer, description: Secondi prima di un nuovo tentativo }
+    ItineraryGenerationJob:
+      type: object
+      required: [id, conversationId, status, progress, progressLabel]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        progressLabel: { type: string }
+        result:
+          type: object
+          nullable: true
+          description: Contiene requirementsSnapshot dalla creazione e la proposta o l'errore al completamento.
+          properties:
+            requirementsSnapshot: { type: object, additionalProperties: true }
+            errorCode: { type: string, nullable: true, description: Codice del vincolo che ha impedito la generazione }
+            outbound:
+              type: object
+              nullable: true
+              description: Volo di andata effettivamente valutato quando manca un ritorno compatibile
+              properties:
+                date: { type: string, format: date-time }
+                expectedReturnDate: { type: string, format: date-time }
+                origin: { type: object, additionalProperties: true }
+                destination: { type: object, additionalProperties: true }
+            requested:
+              type: object
+              nullable: true
+              description: Riepilogo canonico della richiesta di ritorno usata per la ricerca
+              properties:
+                outbound: { type: object, nullable: true, additionalProperties: true }
+                date: { type: string, format: date-time, nullable: true }
+                durationDays: { type: integer, nullable: true }
+                expectedReturnDate: { type: string, format: date-time, nullable: true }
+            availableReturns:
+              type: array
+              description: Ritorni unici ordinati per data, con scarto e durata risultante quando calcolabili
+              items:
+                type: object
+                properties:
+                  availableReturnDate: { type: string, format: date-time }
+                  outboundDate: { type: string, format: date-time, nullable: true }
+                  expectedReturnDate: { type: string, format: date-time, nullable: true }
+                  daysShift: { type: integer, nullable: true }
+                  resultingDurationDays: { type: integer, nullable: true }
+            alternatives:
+              type: array
+              nullable: true
+              description: Alias retrocompatibile di availableReturns, già deduplicato e ordinato
+              items: { type: object, additionalProperties: true }
+        error: { type: string, nullable: true }
 
 security:
   - bearerAuth: []
 
 paths:
+  /health:
+    get:
+      summary: Healthcheck del backend
+      security: []
+      responses:
+        '200': { description: Backend operativo }
+  /health/live:
+    get:
+      summary: Liveness probe senza dipendenze esterne
+      security: []
+      responses:
+        '200': { description: Processo raggiungibile }
+  /health/ready:
+    get:
+      summary: Readiness probe con verifica PostgreSQL
+      security: []
+      responses:
+        '200': { description: Database raggiungibile }
+        '503': { description: Database non disponibile }
+  /metrics:
+    get:
+      summary: Esporta metriche aggregate protette
+      security:
+        - metricsBearer: []
+      responses:
+        '200': { description: Snapshot JSON di contatori e istogrammi }
+        '401': { description: Token metriche mancante o non valido }
+        '404': { description: Exporter disabilitato }
   /auth/register:
     post:
       security: []
@@ -40,6 +130,13 @@ paths:
       responses:
         '201': { description: Utente creato, ritorna token JWT }
         '409': { description: Email già registrata }
+        '429':
+          description: Limite per IP o account superato
+          headers:
+            Retry-After: { schema: { type: integer }, description: Secondi prima di un nuovo tentativo }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateLimitError' }
 
   /auth/login:
     post:
@@ -58,16 +155,54 @@ paths:
       responses:
         '200': { description: Login riuscito, ritorna token JWT }
         '401': { description: Credenziali non valide }
+        '429':
+          description: Limite per IP o account superato
+          headers:
+            Retry-After: { schema: { type: integer }, description: Secondi prima di un nuovo tentativo }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateLimitError' }
+
+  /auth/refresh:
+    post:
+      summary: Ruota il refresh token HttpOnly e restituisce un nuovo access token
+      security: []
+      responses:
+        '200': { description: Nuovo access token JWT }
+        '401': { description: Refresh token mancante, non valido, scaduto o riutilizzato }
+
+  /auth/logout:
+    post:
+      summary: Revoca il refresh token corrente
+      security: []
+      responses:
+        '204': { description: Refresh token revocato }
 
   /chat/conversations:
-    post:
-      summary: Crea una nuova conversazione
+    get:
+      summary: Elenca in modo paginato le conversazioni dell'utente autenticato
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
       responses:
-        '201': { description: Conversazione creata }
+        '200': { description: Pagina di conversazioni con stato, riepilogo e metadati }
+        '400': { description: Parametri di paginazione non validi }
+    post:
+      summary: Prepara una sessione conversazionale transitoria
+      description: >-
+        Restituisce un conversationId UUID senza creare ancora una Conversation.
+        La Conversation viene persistita atomicamente con il primo messaggio;
+        l'apertura della chat non compare nello storico.
+      responses:
+        '201': { description: Sessione transitoria preparata, con conversationId }
 
   /chat/conversations/{id}/messages:
     post:
-      summary: Invia un messaggio nella conversazione (raccolta requisiti / generazione itinerario)
+      summary: Invia un messaggio e materializza la conversazione al primo invio
       parameters:
         - in: path
           name: id
@@ -79,12 +214,135 @@ paths:
           application/json:
             schema:
               type: object
-              required: [message]
               properties:
-                message: { type: string }
+                message:
+                  type: string
+                  maxLength: 10000
+                  description: Testo opzionale quando è presente almeno un imageId; in assenza di testo il backend usa un messaggio contestuale.
+                imageIds:
+                  type: array
+                  maxItems: 5
+                  items: { type: string, format: uuid }
+                  description: >-
+                    Immagini già caricate nella stessa conversazione da includere nel turno.
+                    Con vision disabilitata restano solo metadati/analisi disponibili; non
+                    modificano il percorso testuale.
       responses:
-        '200': { description: Risposta dell'assistente, eventualmente con itinerario proposto }
+        '200':
+          description: Risposta dell'assistente; una conferma valida espone nextAction per avviare il job
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply: { type: string }
+                  phase: { type: string }
+                  generationReady: { type: boolean }
+                  requirements: { type: object, additionalProperties: true }
+                  nextAction:
+                    type: object
+                    nullable: true
+                    properties:
+                      type: { type: string, enum: [start_itinerary_generation] }
+                      method: { type: string, enum: [POST] }
+                      path: { type: string, example: /api/itinerary-jobs }
+                      conversationId: { type: string, format: uuid }
+                      requiresIdempotencyKey: { type: boolean }
+        '400': { description: Messaggio mancante/vuoto senza immagini, o oltre il limite }
+        '409': { description: Turno concorrente ancora in corso; lock conversazionale in timeout }
         '404': { description: Conversazione non trovata }
+
+  /chat/conversations/{id}:
+    get:
+      summary: Recupera stato, messaggi e itinerari associati a una conversazione dell'utente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Dettaglio completo della conversazione }
+        '404': { description: Conversazione non trovata o appartenente a un altro utente }
+    delete:
+      summary: Elimina la conversazione dell'utente autenticato
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Conversazione eliminata }
+        '404': { description: Conversazione non trovata o appartenente a un altro utente }
+
+  /chat/conversations/{conversationId}/preferences/images:
+    post:
+      summary: Carica un'immagine privata come riferimento di preferenza
+      description: >-
+        Richiede autenticazione Bearer. Accetta un solo file nel campo multipart
+        `image`, in JPEG, PNG o WebP, massimo 5 MiB. Il server verifica anche i
+        magic bytes e conserva il file con nome casuale fuori dalla directory statica.
+        Se il conversationId è l'UUID transitorio restituito da POST /chat/conversations,
+        l'upload materializza automaticamente la conversazione con lo stato iniziale.
+        Se GROQ_VISION_ENABLED è attivo e il modello vision è disponibile, la risposta
+        include una descrizione/tag strutturati. In caso contrario l'upload resta valido
+        con analisi `metadata_only`; il contesto chat non deve dedurre preferenze senza
+        una descrizione attendibile.
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '201': { description: Immagine salvata con metadati e URL autenticato }
+        '400': { description: Multipart, MIME o contenuto immagine non validi }
+        '401': { description: Token mancante o non valido }
+        '404': { description: Conversazione non trovata o appartenente a un altro utente }
+        '413': { description: Immagine oltre il limite di 5 MiB }
+
+  /chat/conversations/{conversationId}/preferences/images/{imageId}/content:
+    get:
+      summary: Scarica un'immagine di preferenza dell'utente
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: imageId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Contenuto binario dell'immagine }
+        '401': { description: Token mancante o non valido }
+        '404': { description: Immagine non trovata o appartenente a un altro utente }
+
+  /chat/conversations/{conversationId}/preferences/images/{imageId}:
+    delete:
+      summary: Rimuove un'immagine di preferenza
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: imageId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Immagine rimossa }
+        '401': { description: Token mancante o non valido }
+        '404': { description: Immagine non trovata o appartenente a un altro utente }
 
   /itineraries:
     post:
@@ -102,6 +360,7 @@ paths:
       responses:
         '201': { description: Itinerario draft creato }
         '400': { description: Nessuna opzione valida da salvare }
+        '409': { description: Proposta obsoleta o priva di snapshot dei requisiti; rigenerazione richiesta }
 
   /itineraries/{id}:
     get:
@@ -114,6 +373,36 @@ paths:
       responses:
         '200': { description: Itinerario trovato }
         '404': { description: Itinerario non trovato }
+
+  /itinerary-jobs:
+    post:
+      summary: Accoda una generazione itinerario idempotente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversationId, idempotencyKey]
+              properties:
+                conversationId: { type: string, format: uuid }
+                idempotencyKey: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        '202': { description: Job creato e accodato }
+        '200': { description: Job già esistente per la stessa chiave }
+        '409': { description: Conversazione non pronta o chiave usata altrove }
+
+  /itinerary-jobs/{id}:
+    get:
+      summary: Consulta stato, avanzamento, risultato o errore del job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Stato corrente del job }
+        '404': { description: Job non trovato o appartenente a un altro utente }
 
   /bookings:
     post:

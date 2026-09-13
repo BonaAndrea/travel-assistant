@@ -5,8 +5,10 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db/prisma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { createAuthRateLimiter } from '../middleware/authRateLimiter.js';
 
 const router = Router();
+router.use(createAuthRateLimiter());
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REFRESH_COOKIE = 'refresh_token';
@@ -54,7 +56,7 @@ function publicUser(user) {
 }
 
 const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(6),
   name: z.string().min(1),
 });
@@ -79,7 +81,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 }));
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string(),
 });
 
