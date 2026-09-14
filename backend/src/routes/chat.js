@@ -8,6 +8,7 @@ import { CircuitOpenError, isTransientGroqError, llmErrorFields, logLlmEvent, re
 import {
   getMissingFields, validateConsistency, isComplete, normalizeTravelMonth,
   extractExplicitReturnDate, extractExplicitDepartureDate, extractExplicitTravelDates, extractExplicitDuration,
+  hasAmbiguousNumericDateInterval,
 } from '../services/requirementsService.js';
 import { sameRequirements } from '../services/requirementsSnapshot.js';
 import { findConfirmedDateConflict } from '../services/bookingService.js';
@@ -70,6 +71,28 @@ async function getDateOverlapWarning(userId, requirements) {
 
 function isConversationId(value) {
   return UUID_PATTERN.test(String(value || ''));
+}
+
+function deterministicConfirmationSummary(requirements) {
+  const lines = [
+    `Destinazione: ${requirements.country || 'da definire'}`,
+    `Partenza da: ${requirements.departureAirport || 'da definire'}`,
+    `Periodo: ${requirements.travelMonth || 'da definire'}`,
+    `Durata: ${requirements.durationDays || 'da definire'} giorni`,
+    `Partecipanti: ${requirements.participants || 'da definire'}`,
+    `Budget totale: ${requirements.budget || 'da definire'}€`,
+    `Preferenze: ${Array.isArray(requirements.activityPreferences) ? requirements.activityPreferences.join(', ') : 'da definire'}`,
+  ];
+  return `Riepilogo della richiesta:\n\n${lines.map((line) => `• ${line}`).join('\n')}\n\nConfermi questi requisiti? Rispondi "sì" per generare l'itinerario.`;
+}
+
+function generationIssueReply(issue) {
+  const alternatives = Array.isArray(issue?.alternatives) && issue.alternatives.length > 0
+    ? ` Alternative disponibili nel catalogo: ${issue.alternatives.map((alternative) =>
+      alternative?.availableReturnDate?.slice?.(0, 10) || alternative?.date?.slice?.(0, 10) || alternative?.city,
+    ).filter(Boolean).join(', ')}.`
+    : '';
+  return `${issue?.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (date, durata, aeroporto, budget o preferenze), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
 }
 
 function parsePositiveInteger(value, fallback) {
@@ -263,16 +286,19 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     }
   }
 
+  if (hasAmbiguousNumericDateInterval(message)) {
+    const reply = 'Ho ricevuto l’intervallo “1-6”, ma senza mese e anno non posso distinguere due date. Indica le date complete (per esempio 1 giugno–6 giugno 2026) oppure specifica la durata in giorni.';
+    state.phase = 'collecting';
+    await prisma.conversation.update({ where: { id }, data: { state } });
+    await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
+    return res.json({ reply, phase: state.phase, requirements: state.requirements, clarificationRequired: 'date_interval' });
+  }
+
   // Fase speciale: l'utente sta confermando la generazione dell’itinerario
   if (state.phase === 'confirming' && isConfirmationMessage(message)) {
     if (state.generationIssue) {
       const issue = state.generationIssue;
-      const alternatives = Array.isArray(issue.alternatives) && issue.alternatives.length > 0
-        ? ` Alternative disponibili nel catalogo: ${issue.alternatives.map((alternative) =>
-          alternative?.availableReturnDate?.slice?.(0, 10) || alternative?.date?.slice?.(0, 10) || alternative?.city,
-        ).filter(Boolean).join(', ')}.`
-        : '';
-      const reply = `${issue.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (date, durata, aeroporto, budget o preferenze), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
+      const reply = generationIssueReply(issue);
       await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
       return res.json({ reply, phase: state.phase, generationReady: false, generationIssue: issue });
     }
@@ -384,7 +410,7 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     }
     }
   }
-  if (explicitDuration) {
+  if (explicitDuration && !explicitTravelDates) {
     const departureDate = normalizedFields.outboundDate || state.requirements.outboundDate
       || extractExplicitDepartureDate(history.slice(0, -1));
     const returnDate = normalizedFields.returnDate || state.requirements.returnDate;
@@ -419,18 +445,7 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     reply = 'La durata indicata non coincide con le date di partenza e ritorno. Conferma quale dato devo correggere: le date oppure il numero di giorni.';
   } else if (isComplete(state.requirements) && missing.length === 0 && issues.length === 0) {
     state.phase = 'confirming';
-    if (!reply?.trim()) {
-      reply = `Tutti i dati sono completi!\n\n` +
-        `• Destinazione: ${state.requirements.country}\n` +
-        `• Partenza da: ${state.requirements.departureAirport}\n` +
-        `• Periodo: ${state.requirements.travelMonth} (${state.requirements.durationDays} giorni)\n` +
-        `• Partecipanti: ${state.requirements.participants}\n` +
-        `• Budget totale: ${state.requirements.budget}€\n` +
-        `• Preferenze: ${state.requirements.activityPreferences?.join(', ')}\n\n` +
-        `Confermi che vada bene così? (Rispondi "sì" per generare l'itinerario)`;
-    } else if (!/rispondi\s+["']?s[ìi]["']?/i.test(reply)) {
-      reply = `${reply.trim()}\n\n👉 Rispondi "sì" o "confermo" per generare l'itinerario.`;
-    }
+    reply = deterministicConfirmationSummary(state.requirements);
   }
 
   await prisma.conversation.update({ where: { id }, data: { state } });

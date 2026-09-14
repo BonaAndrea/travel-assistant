@@ -103,6 +103,41 @@ test('confirmation resolves Spain aliases before enabling generation', async () 
   }));
 });
 
+test('la conferma usa sempre un riepilogo deterministico anche con testo LLM', async () => {
+  conversation.state.phase = 'collecting';
+  conversation.state.requirements = {
+    country: 'Spagna', departureAirport: 'FCO', travelMonth: 'giugno', durationDays: 6,
+    participants: 2, budget: 5000, activityPreferences: ['cultura'],
+  };
+  chatTurn.mockResolvedValue({ assistantMessage: 'Perfetto, tutto pronto!', updatedFields: {} });
+  const response = await request(app).post('/chat/conversations/conversation-1/messages').send({ message: 'ok' });
+  expect(response.body.phase).toBe('confirming');
+  expect(response.body.reply).toContain('Riepilogo della richiesta');
+  expect(response.body.reply).toContain('Durata: 6 giorni');
+  expect(response.body.reply).toContain('Rispondi "sì"');
+  expect(response.body.reply).not.toContain('Perfetto, tutto pronto!');
+});
+
+test('un intervallo numerico senza mese chiede chiarimento e non inventa la durata', async () => {
+  conversation.state.requirements.durationDays = undefined;
+  const response = await request(app).post('/chat/conversations/conversation-1/messages').send({ message: '1-6' });
+  expect(response.status).toBe(200);
+  expect(response.body.clarificationRequired).toBe('date_interval');
+  expect(response.body.reply).toContain('mese e anno');
+  expect(response.body.requirements.durationDays).toBeUndefined();
+  expect(chatTurn).not.toHaveBeenCalled();
+});
+
+test('blocca anche l’intervallo numerico inserito in una frase del browser', async () => {
+  conversation.state.requirements.durationDays = undefined;
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Vorrei viaggiare dal 1-6, magari 6 notti' });
+  expect(response.status).toBe(200);
+  expect(response.body.clarificationRequired).toBe('date_interval');
+  expect(response.body.requirements.durationDays).toBeUndefined();
+  expect(chatTurn).not.toHaveBeenCalled();
+});
+
 test('espone il preflight overlap in modo non bloccante tra aggiornamento date e conferma', async () => {
   conversation.state.phase = 'confirming';
   conversation.state.requirements.outboundDate = '2030-06-01T00:00:00.000Z';
@@ -217,6 +252,17 @@ test('return date recalculates duration and explicit duration wins on the next t
   expect(second.body.requirements.durationDays).toBe(5);
   expect(second.body.requirements.returnDate).toBe('2026-11-27T00:00:00.000Z');
   expect(second.body.phase).toBe('confirming');
+});
+
+test('riconosce il cambio esplicito della data di ritorno con wording alternativo', async () => {
+  conversation.state.phase = 'confirming';
+  conversation.state.requirements.outboundDate = '2026-11-22T00:00:00.000Z';
+  conversation.state.requirements.durationDays = 7;
+  chatTurn.mockResolvedValue({ assistantMessage: 'Aggiorno la data.', updatedFields: {} });
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Cambio il ritorno al 27 novembre' });
+  expect(response.body.requirements.returnDate).toBe('2026-11-27T00:00:00.000Z');
+  expect(response.body.requirements.durationDays).toBe(5);
 });
 
 test('incoherent explicit dates and duration require clarification without confirmation', async () => {

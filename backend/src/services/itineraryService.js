@@ -713,14 +713,26 @@ export async function generateItinerary(requirements, onProgress = async () => {
   }
 
   if (result.status === 'flight_over_budget' && (!alternative || alternative.status !== 'ok')) {
-    return { error: 'Il costo della coppia di voli supera il budget indicato.' };
+    return {
+      errorCode: 'flight_over_budget',
+      error: 'Il costo della coppia di voli supera il budget indicato.',
+      alternatives: flights.pairs.slice(1, 5).map((pair) => ({
+        outboundDate: pair.outbound.date.toISOString(),
+        returnDate: pair.inbound.date.toISOString(),
+        totalFlightCost: pair.cost,
+      })),
+    };
   }
 
   if (result.status !== 'ok' && (!alternative || alternative.status !== 'ok')) {
-    const reason = result.status === 'no_hotel'
-      ? 'Nessun hotel con disponibilità continuativa per tutte le notti richieste.'
-      : 'Il costo dell\'hotel, anche nella fascia più economica, supera il budget residuo dopo i voli.';
-    return { error: reason };
+    const issue = result.status === 'no_hotel'
+      ? { errorCode: 'no_hotel', error: 'Nessun hotel con disponibilità continuativa per tutte le notti richieste.' }
+      : { errorCode: 'hotel_over_budget', error: 'Il costo dell\'hotel, anche nella fascia più economica, supera il budget residuo dopo i voli.' };
+    return { ...issue, alternatives: flights.pairs.slice(1, 5).map((pair) => ({
+      outboundDate: pair.outbound.date.toISOString(),
+      returnDate: pair.inbound.date.toISOString(),
+      totalFlightCost: pair.cost,
+    })) };
   }
 
   return { primary: result.status === 'ok' ? result : null, alternative };

@@ -43,6 +43,12 @@ function parseDayMonth(day, month, year = new Date().getUTCFullYear()) {
 export function extractExplicitTravelDates(value, referenceDate = new Date()) {
   const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const monthPattern = [...MONTHS_IT, ...MONTH_ALIASES.keys()].join('|');
+  const abbreviated = text.match(new RegExp(`(?:dal[^0-9]{0,4})?(\\d{1,2})\\s*(?:-|–|—|al|a|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
+  if (abbreviated) {
+    const departure = parseDayMonth(abbreviated[1], abbreviated[3], abbreviated[4] || referenceDate.getUTCFullYear());
+    const returnDate = parseDayMonth(abbreviated[2], abbreviated[3], abbreviated[4] || referenceDate.getUTCFullYear());
+    if (departure && returnDate) return { departure, returnDate };
+  }
   const named = text.match(new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?\\s*(?:-|–|—|a|al|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
   if (named) {
     const departure = parseDayMonth(named[1], named[2], named[3] || referenceDate.getUTCFullYear());
@@ -67,11 +73,19 @@ export function extractExplicitDuration(value) {
   return Number.isInteger(durationDays) && durationDays > 0 && durationDays <= 60 ? durationDays : null;
 }
 
+/** Intervallo numerico privo di mese/anno (es. "1-6"): non è una durata. */
+export function hasAmbiguousNumericDateInterval(value) {
+  const text = String(value || '').trim();
+  if (/\b(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(text)) return false;
+  return /(?:^|\s)(?:dal(?:l['’])?\s+)?\d{1,2}\s*[-–—]\s*\d{1,2}(?=\s|$|[,.!?])/i.test(text)
+    || /(?:^|\s)(?:dal(?:l['’])?\s+)?\d{1,2}\s+al\s+\d{1,2}(?=\s|$|[,.!?])/i.test(text);
+}
+
 /** Estrae solo date esplicitamente associate a ritorno/rientro, senza usare segnali vision. */
 export function extractExplicitReturnDate(value, referenceDate = new Date()) {
   const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const monthPattern = [...MONTHS_IT, ...MONTH_ALIASES.keys()].join('|');
-  const intent = '(?:torniamo|torno|tornare|ritorno|rientro|rientrare|rientriamo|preferisco\\s+(?:tornare|rientrare))';
+  const intent = '(?:torniamo|torno|tornare|ritorno|rientro|rientrare|rientriamo|rientri|cambio\\s+(?:il\\s+)?ritorno|data\\s+di\\s+ritorno|preferisco\\s+(?:tornare|rientrare))';
   const named = text.match(new RegExp(`${intent}[^.!?\\n]{0,60}?(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
   if (named) return parseDayMonth(named[1], named[2], named[3] || referenceDate.getUTCFullYear());
   const numeric = text.match(new RegExp(`${intent}[^.!?\\n]{0,60}?(\\d{1,2})[\\/-](\\d{1,2})(?:[\\/-](20\\d{2}))?`, 'i'));
