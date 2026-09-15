@@ -18,7 +18,7 @@ const start = monthToDateRange('luglio').start;
 const day = (offset, hour = 0) => new Date(Date.UTC(start.getUTCFullYear(), 6, 1 + offset, hour));
 const requirements = {
   budget: 500, country: 'Spagna', departureAirport: 'FCO', activityPreferences: ['cultura'],
-  travelMonth: 'luglio', durationDays: 2, participants: 1,
+  travelMonth: 'luglio', durationDays: 3, participants: 1,
 };
 let fixture;
 
@@ -160,7 +160,7 @@ test('rejects later returns and returns from another city when the exact match i
   });
   expect(result.error).toMatch(/Ritorni disponibili dal catalogo/);
   expect(result.requested).toEqual(expect.objectContaining({
-    date: fixture.outbound.date.toISOString(), durationDays: 2,
+    date: fixture.outbound.date.toISOString(), durationDays: 3,
     expectedReturnDate: day(2).toISOString(),
   }));
   expect(result.availableReturns).toHaveLength(1);

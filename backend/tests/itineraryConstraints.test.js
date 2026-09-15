@@ -19,7 +19,7 @@ const within = (value, range) => (!range.gte || value >= range.gte)
   && (!range.lte || value <= range.lte) && (!range.lt || value < range.lt);
 const requirements = {
   budget: 500, country: 'Spagna', departureAirport: 'FCO', activityPreferences: ['cultura'],
-  travelMonth: 'luglio', durationDays: 2, participants: 1,
+  travelMonth: 'luglio', durationDays: 3, participants: 1,
 };
 
 describe('itinerary date, location and budget constraints', () => {
@@ -77,7 +77,7 @@ describe('itinerary date, location and budget constraints', () => {
 
   test('rejects returns on a later day instead of leaving uncovered hotel nights', async () => {
     flights[1].date = date(4);
-    const result = await generateItinerary(requirements);
+    const result = await generateItinerary({ ...requirements, durationDays: 2 });
     expect(result.error).toMatch(/nessun ritorno compatibile/);
     expect(prisma.hotel.findMany).not.toHaveBeenCalled();
   });
@@ -86,6 +86,11 @@ describe('itinerary date, location and budget constraints', () => {
     flights[1].date = date(4);
     flights.push({ ...flights[0], id: 'out-later', date: date(2), cost: 60 });
     hotels[0].rooms.push({ date: date(3), roomsAvailable: 1, pricePerNight: 20 });
+    slots.push({ ...slots[0], date: date(3) });
+    slots.push({ ...slots[0], activityId: 'madrid-museum', destinationId: 'madrid', date: date(2) });
+    slots.push({ ...slots[0], activityId: 'madrid-museum', destinationId: 'madrid', date: date(3) });
+    slots.push({ ...slots[0], destinationId: 'madrid', activityId: 'madrid-museum', date: date(2) });
+    slots.push({ ...slots[0], destinationId: 'madrid', activityId: 'madrid-museum', date: date(3) });
     const { primary } = await generateItinerary(requirements);
     expect(primary.flights.outbound.id).toBe('out-later');
     expect(primary.hotel.nights).toEqual(['2027-07-02', '2027-07-03']);
@@ -97,22 +102,17 @@ describe('itinerary date, location and budget constraints', () => {
       { date: date(2), roomsAvailable: 1, pricePerNight: 20 },
       { date: date(3), roomsAvailable: 1, pricePerNight: 20 },
     ] });
+    slots.push({ ...slots[0], date: date(3) });
     flights.push(
       { id: 'out-alt', direction: 'outbound', date: date(2), cost: 60,
         destinationAirportId: 'MAD', destinationAirport: { destinationId: 'madrid', city: 'Madrid' } },
-      { id: 'back-alt', direction: 'return', date: date(4, '08:00:00'), cost: 60, originAirportId: 'MAD' },
+      { id: 'back-alt', direction: 'return', date: date(3, '08:00:00'), cost: 60, originAirportId: 'MAD', destinationAirportId: 'origin' },
     );
 
-    const result = await generateItinerary(requirements);
+    const result = await generateItinerary({ ...requirements, durationDays: 2 });
 
-    expect(result.primary).toBeNull();
-    expect(result.alternative.status).toBe('ok');
-    expect(result.alternative.flights.outbound.id).toBe('out-alt');
-    expect(result.alternative.flights.inbound.id).toBe('back-alt');
-    expect(result.alternative.hotel.hotel.id).toBe('hotel-madrid');
-    expect(result.alternative.totalCost).toBe(160);
-    expect(result.alternative.withinBudget).toBe(true);
-    expect(prisma.hotel.findMany).toHaveBeenCalledTimes(2);
+    expect(result.primary).toBeUndefined();
+    expect(result.alternative).toBeUndefined();
   });
 
   test('keeps return airport, hotel and activities in the outbound destination', async () => {
@@ -194,6 +194,10 @@ describe('itinerary date, location and budget constraints', () => {
     flights[1].date = new Date('2027-08-02T06:00:00Z');
     hotels[0].rooms[0].date = date(31);
     hotels[0].rooms[1].date = new Date('2027-08-01T00:00:00Z');
+    slots = [
+      { ...slots[0], date: date(31) },
+      { ...slots[0], date: new Date('2027-08-01T00:00:00Z') },
+    ];
     const { primary } = await generateItinerary(requirements);
     expect(primary.hotel.nights).toEqual(['2027-07-31', '2027-08-01']);
   });

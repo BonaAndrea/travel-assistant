@@ -207,7 +207,7 @@ test('explicit return date recalculates duration before the following confirmati
   expect(update.status).toBe(200);
   expect(update.body.requirements.returnDate).toBe('2026-11-13T00:00:00.000Z');
   expect(update.body.requirements.outboundDate).toBe('2026-11-01T00:00:00.000Z');
-  expect(update.body.requirements.durationDays).toBe(12);
+  expect(update.body.requirements.durationDays).toBe(13);
 
   const confirmation = await request(app).post('/chat/conversations/conversation-1/messages').send({ message: 'sì' });
   expect(confirmation.status).toBe(200);
@@ -222,7 +222,7 @@ test('explicit December return date updates a November departure across the mont
   const response = await request(app).post('/chat/conversations/conversation-1/messages')
     .send({ message: 'Torniamo il 6 dicembre' });
   expect(response.body.requirements.returnDate).toBe('2026-12-06T00:00:00.000Z');
-  expect(response.body.requirements.durationDays).toBe(14);
+  expect(response.body.requirements.durationDays).toBe(15);
 });
 
 test('an explicit date range overrides model duration deterministically', async () => {
@@ -233,7 +233,7 @@ test('an explicit date range overrides model duration deterministically', async 
     .send({ message: 'Facciamo 22 novembre - 6 dicembre 2026' });
   expect(response.body.requirements.outboundDate).toBe('2026-11-22T00:00:00.000Z');
   expect(response.body.requirements.returnDate).toBe('2026-12-06T00:00:00.000Z');
-  expect(response.body.requirements.durationDays).toBe(14);
+  expect(response.body.requirements.durationDays).toBe(15);
 });
 
 test('return date recalculates duration and explicit duration wins on the next turn', async () => {
@@ -244,7 +244,7 @@ test('return date recalculates duration and explicit duration wins on the next t
 
   const first = await request(app).post('/chat/conversations/conversation-1/messages')
     .send({ message: 'Torniamo il 27 novembre' });
-  expect(first.body.requirements.durationDays).toBe(5);
+  expect(first.body.requirements.durationDays).toBe(6);
   expect(first.body.requirements.returnDate).toBe('2026-11-27T00:00:00.000Z');
 
   const second = await request(app).post('/chat/conversations/conversation-1/messages')
@@ -262,7 +262,7 @@ test('riconosce il cambio esplicito della data di ritorno con wording alternativ
   const response = await request(app).post('/chat/conversations/conversation-1/messages')
     .send({ message: 'Cambio il ritorno al 27 novembre' });
   expect(response.body.requirements.returnDate).toBe('2026-11-27T00:00:00.000Z');
-  expect(response.body.requirements.durationDays).toBe(5);
+  expect(response.body.requirements.durationDays).toBe(6);
 });
 
 test('incoherent explicit dates and duration require clarification without confirmation', async () => {

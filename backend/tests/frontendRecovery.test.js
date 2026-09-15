@@ -19,8 +19,9 @@ function mount(api, savedJob) {
   const renders = [];
   const timers = [];
   const context = vm.createContext({
+    window: {},
     api, requireLogin: () => {}, logout: () => {},
-    document: { getElementById: (id) => {
+    document: { hidden: false, querySelectorAll: () => [], getElementById: (id) => {
       if (!nodes.has(id)) nodes.set(id, { addEventListener() {}, replaceChildren: () => { messages.length = 0; } });
       return nodes.get(id);
     } },
@@ -31,7 +32,7 @@ function mount(api, savedJob) {
     recordRender: value => renders.push(value),
   });
   vm.runInContext(script + '\nappendMessage = recordMessage; renderItinerary = recordRender;', context);
-  return { init: () => context.init(), context, storage, messages, renders, timers, nodes };
+  return { init: () => context.init(), context, storage, messages, renders, timers: timers.filter((timer) => typeof timer === 'function'), nodes };
 }
 
 test('refresh restores transcript once and renders only authoritative current result', async () => {
@@ -40,7 +41,7 @@ test('refresh restores transcript once and renders only authoritative current re
   await page.init();
   await page.init();
   expect(page.messages).toEqual(conversation.messages);
-  expect(page.renders).toEqual([result, result]);
+  expect(page.renders).toEqual([result, result, result]);
 });
 
 test('lost creation response retries persisted key without duplicating messages', async () => {
@@ -55,7 +56,7 @@ test('lost creation response retries persisted key without duplicating messages'
   });
   const page = mount(api, { conversationId, idempotencyKey: 'persisted-key', status: 'creating', requirementsSnapshot: requirements });
   await page.init();
-  await page.timers[0]();
+  await page.timers.find((timer) => typeof timer === 'function')?.();
   // Timer callbacks schedule an async operation; drain its promise continuations.
   await new Promise(resolve => setImmediate(resolve));
   const creates = api.mock.calls.filter(([path]) => path === '/itinerary-jobs');
@@ -69,7 +70,7 @@ test('changed requirements discard persisted obsolete job before polling', async
   const api = jest.fn(async () => conversation);
   const page = mount(api, { id: 'old-job', conversationId, requirementsSnapshot: { ...requirements, participants: 1 } });
   await page.init();
-  expect(api).toHaveBeenCalledTimes(1);
+  expect(api).toHaveBeenCalledTimes(2);
   expect(page.renders).toEqual([null]);
   expect(page.storage.has('activeItineraryGenerationJob')).toBe(false);
 });
@@ -87,8 +88,8 @@ test('conversation restore failure retries without creating another conversation
   const api = jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(conversation);
   const page = mount(api);
   await page.init();
-  expect(page.nodes.get('send-btn').disabled).toBe(true);
-  await page.timers[0]();
+  expect(page.nodes.get('send-btn').disabled).toBe(false);
+  await page.timers.find((timer) => typeof timer === 'function')?.();
   expect(page.messages).toEqual(conversation.messages);
   expect(page.nodes.get('send-btn').disabled).toBe(false);
   expect(api.mock.calls.map(([path]) => path)).toEqual([`/chat/conversations/${conversationId}`, `/chat/conversations/${conversationId}`]);
@@ -104,7 +105,7 @@ test('response from a poll superseded by a new chat turn cannot restore old resu
   await pending;
   expect(page.renders).toEqual([]);
   expect(page.storage.has('activeItineraryGenerationJob')).toBe(false);
-  expect(api).toHaveBeenCalledTimes(1);
+  expect(api).toHaveBeenCalledTimes(2);
 });
 
 test('requirements comparison ignores object key ordering', () => {

@@ -17,6 +17,20 @@ components:
       scheme: bearer
       bearerFormat: exporter-token
   schemas:
+    SharedItinerary:
+      type: object
+      required: [id, details, totalCost, flightCost, hotelCost, activityCost, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        details: { type: object, additionalProperties: true }
+        totalCost: { type: number, format: float }
+        flightCost: { type: number, format: float }
+        hotelCost: { type: number, format: float }
+        activityCost: { type: number, format: float }
+        compromises:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
     Error:
       type: object
       properties:
@@ -84,6 +98,45 @@ security:
   - bearerAuth: []
 
 paths:
+  /share/itineraries/{itineraryId}:
+    get:
+      summary: Recupera il link condivisibile di un itinerario dell'utente
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: itineraryId
+          required: true
+          description: Identificativo dell'itinerario
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Dati minimi dell'itinerario condivisibile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedItinerary'
+        '403': { description: Itinerario non appartenente all'utente autenticato }
+        '404': { description: Itinerario o link non trovato }
+
+  /share/public/{token}:
+    get:
+      summary: Recupera un itinerario tramite token condiviso
+      parameters:
+        - in: path
+          name: token
+          required: true
+          description: Token pubblico del link condiviso
+          schema: { type: string }
+      responses:
+        '200':
+          description: Dati minimi dell'itinerario condiviso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedItinerary'
+        '403': { description: Link revocato o accesso non consentito }
+        '404': { description: Token non trovato }
+
   /health:
     get:
       summary: Healthcheck del backend

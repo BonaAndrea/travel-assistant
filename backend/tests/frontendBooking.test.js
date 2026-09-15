@@ -8,16 +8,17 @@ const bookingCode = html.slice(html.indexOf("        const btn = card.querySelec
 function mount(api, storage = new Map()) {
   let click;
   const button = { disabled: false, addEventListener: (_, handler) => { click = handler; } };
-  const status = {};
+  const status = { textContent: '' };
   vm.runInNewContext(bookingCode, {
-    card: { querySelector: (selector) => selector === '.book-btn' ? button : status },
+    card: { querySelector: (selector) => selector === '.book-btn' ? button : Object.assign(status, { addEventListener() {} }), querySelectorAll: () => [] },
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     ACTIVE_JOB_KEY: 'job', conversationId: 'conversation', choice: 'primary',
     option: {
       totalCost: 420,
-      flights: { outbound: { destinationAirport: { iataCode: 'LIS' } } },
+      flights: { outbound: { destinationAirport: { iataCode: 'LIS', city: 'Lisbona' }, date: '2026-07-01' }, inbound: { date: '2026-07-03' } },
       hotel: { hotel: { name: 'Hotel Lisboa' } },
     },
+    isAlternative: false,
     crypto: { randomUUID: () => 'stable-request-key' }, confirm: () => true, api,
   });
   return { click, button, status, storage };
@@ -64,10 +65,10 @@ test('booking confirmation summarizes destination, total and final verification'
   const button = { disabled: false, addEventListener: (_, handler) => { click = handler; } };
   const status = {};
   vm.runInNewContext(bookingCode, {
-    card: { querySelector: (selector) => selector === '.book-btn' ? button : status },
+    card: { querySelector: (selector) => selector === '.book-btn' ? button : { ...status, addEventListener() {} }, querySelectorAll: () => [] },
     localStorage: { getItem: () => null, setItem: () => {} },
     ACTIVE_JOB_KEY: 'job', conversationId: 'conversation', choice: 'primary',
-    option: { totalCost: 420, flights: { outbound: { destinationAirport: { iataCode: 'LIS' } } } },
+    option: { totalCost: 420, flights: { outbound: { destinationAirport: { iataCode: 'LIS', city: 'Lisbona' }, date: '2026-07-01' }, inbound: { date: '2026-07-03' } } }, isAlternative: false,
     crypto: { randomUUID: () => 'stable-request-key' },
     confirm: (message) => { confirmations.push(message); return false; }, api: jest.fn(),
   });

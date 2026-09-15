@@ -8,7 +8,7 @@ import { CircuitOpenError, isTransientGroqError, llmErrorFields, logLlmEvent, re
 import {
   getMissingFields, validateConsistency, isComplete, normalizeTravelMonth,
   extractExplicitReturnDate, extractExplicitDepartureDate, extractExplicitTravelDates, extractExplicitDuration,
-  hasAmbiguousNumericDateInterval,
+  extractExplicitBudget, extractExplicitParticipants, hasAmbiguousNumericDateInterval,
 } from '../services/requirementsService.js';
 import { sameRequirements } from '../services/requirementsSnapshot.js';
 import { findConfirmedDateConflict } from '../services/bookingService.js';
@@ -372,13 +372,17 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
   }
   const explicitTravelDates = extractExplicitTravelDates(message);
   const explicitDuration = extractExplicitDuration(message);
+  const explicitBudget = extractExplicitBudget(message);
+  const explicitParticipants = extractExplicitParticipants(message);
+  if (explicitBudget !== null) normalizedFields.budget = explicitBudget;
+  if (explicitParticipants !== null) normalizedFields.participants = explicitParticipants;
   let dateDurationConflict = false;
   if (explicitTravelDates && explicitTravelDates.returnDate > explicitTravelDates.departure) {
     normalizedFields.outboundDate = explicitTravelDates.departure.toISOString();
     normalizedFields.returnDate = explicitTravelDates.returnDate.toISOString();
     normalizedFields.durationDays = Math.round(
       (explicitTravelDates.returnDate.getTime() - explicitTravelDates.departure.getTime()) / 86400000,
-    );
+    ) + 1;
     normalizedFields.travelMonth = normalizeTravelMonth(
       explicitTravelDates.departure.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }),
     );
@@ -402,7 +406,7 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     const validAfterDeparture = !departure || Number.isNaN(departure.getTime()) || returnDate > departure;
     if (validAfterDeparture) normalizedFields.returnDate = returnDate.toISOString();
     if (validAfterDeparture && departure) {
-      const durationDays = Math.round((returnDate.getTime() - departure.getTime()) / 86400000);
+      const durationDays = Math.round((returnDate.getTime() - departure.getTime()) / 86400000) + 1;
       if (Number.isFinite(durationDays) && durationDays > 0) {
         normalizedFields.outboundDate = departure.toISOString();
         normalizedFields.durationDays = durationDays;

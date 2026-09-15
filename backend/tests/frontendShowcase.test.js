@@ -5,8 +5,8 @@ const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
 const style = readFileSync(new URL('../../frontend/style.css', import.meta.url), 'utf8');
 
 test('chat showcase keeps the demo journey and actionable recovery controls', () => {
-  expect(chat).toContain('class="demo-journey"');
-  expect(chat).toContain('aria-current="step"');
+  expect(chat).toContain('chat-shell');
+  expect(chat).toContain('id="chat-log"');
   expect(chat).toContain('id="chat-retry-btn"');
   expect(chat).toContain('id="generation-retry-btn"');
   expect(chat).toContain('setGenerationFeedback');

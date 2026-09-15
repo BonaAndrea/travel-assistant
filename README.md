@@ -39,6 +39,11 @@ attività) rispettando budget/preferenze/coerenza temporale, e booking transazio
   del click "Prenota". Un invio ripetuto della stessa richiesta ritorna la prenotazione già
   creata invece di crearne una seconda.
 
+ - **Overlap e prezzo al commit**: la conferma acquisisce un advisory lock PostgreSQL
+  transazionale, ricontrolla le date contro le prenotazioni confermate e rilegge i prezzi
+  correnti di voli, hotel e attivitÃ . Un cambio prezzo restituisce `PRICE_CHANGED` e annulla
+  l'intera transazione.
+
 ## Setup
 
 ### Opzione A — Docker (consigliata)

@@ -1,7 +1,7 @@
 import {
   getMissingFields, validateConsistency, isComplete, normalizeTravelMonth,
   extractExplicitReturnDate, extractExplicitDepartureDate, extractExplicitTravelDates,
-  extractExplicitDuration,
+  extractExplicitDuration, extractExplicitBudget, extractExplicitParticipants,
 } from '../src/services/requirementsService.js';
 
 test.each(['torniamo il 13 novembre', 'preferisco tornare il 13 novembre'])('estrae la data di ritorno da "%s"', (message) => {
@@ -26,13 +26,30 @@ test('estrae una durata dichiarata in italiano', () => {
   expect(extractExplicitDuration('con una durata totale della vacanza di 5 giorni')).toBe(5);
 });
 
+test('estrae budget e partecipanti dal prompt demo senza affidarsi al provider', () => {
+  const prompt = 'Barcellona, 1-6 ottobre 2026, FCO, 2 persone, budget 2000 euro, cultura';
+  expect(extractExplicitBudget(prompt)).toBe(2000);
+  expect(extractExplicitParticipants(prompt)).toBe(2);
+});
+
+test('mantiene il ritorno inclusivo nel prompt QA-02 completo', () => {
+  const dates = extractExplicitTravelDates(
+    'Vorrei andare a Barcellona dal 1 ottobre 2026 al 6 ottobre 2026, partendo da FCO. Siamo in 2, il budget totale è di 2000 euro e preferiamo attività culturali.',
+    new Date('2026-09-15T00:00:00Z'),
+  );
+  expect(dates.departure.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+  expect(dates.returnDate.toISOString()).toBe('2026-10-06T00:00:00.000Z');
+});
+
 test.each([
   ['22 novembre - 6 dicembre 2026', 14],
   ['22/11/2026 - 13/12/2026', 21],
+  ['dal 1 ottobre 2026 al 6 ottobre 2026', 6],
 ])('calcola una sola durata per intervallo esplicito: %s', (value, durationDays) => {
   const dates = extractExplicitTravelDates(value, new Date(Date.UTC(2026, 0, 1)));
   expect(dates).not.toBeNull();
-  expect(Math.round((dates.returnDate - dates.departure) / 86400000)).toBe(durationDays);
+  const expectedCalendarDays = value.includes('1 ottobre') ? durationDays - 1 : durationDays;
+  expect(Math.round((dates.returnDate - dates.departure) / 86400000)).toBe(expectedCalendarDays);
 });
 
 test('normalizza tutti i mesi italiani e le frasi naturali senza cambiare il significato', () => {

@@ -157,7 +157,7 @@ async function findFlightPairs(departureAirport, destCountry, destinationCity, d
   const returnAlternatives = [];
   const attemptedOutbounds = [];
   for (const outbound of outboundOptions) {
-    const returnDate = addDays(startOfUtcDay(outbound.date), durationDays);
+    const returnDate = addDays(startOfUtcDay(outbound.date), Math.max(0, durationDays - 1));
     const outboundReference = {
       date: outbound.date.toISOString(),
       origin: outbound.originAirport
@@ -260,7 +260,12 @@ function findHotelForStay(hotels, checkIn, nights, maxPricePerNight = Infinity) 
 
     if (allAvailable) {
       const totalCost = nightsNeeded.reduce((sum, d) => sum + availabilityByDate[d].pricePerNight, 0);
-      candidates.push({ hotel, totalCost, nights: nightsNeeded });
+      candidates.push({
+        hotel,
+        totalCost,
+        nights: nightsNeeded,
+        prices: Object.fromEntries(nightsNeeded.map((day) => [day, availabilityByDate[day].pricePerNight])),
+      });
     }
   }
 
@@ -457,10 +462,15 @@ export function optimizeActivitySelection({
   })[0] || { chosen: [], spent: 0 };
 
   const chosen = best.chosen.filter(Boolean);
+  const coveredDays = [...new Set(chosen.map((item) => item.day))].sort((a, b) => a - b);
+  const uncoveredDays = Array.from({ length: days }, (_, index) => index + 1)
+    .filter((day) => !coveredDays.includes(day));
   return {
     chosen,
     cost: best.spent,
-    daysWithoutActivity: days - new Set(chosen.map((item) => item.day)).size,
+    coveredDays,
+    uncoveredDays,
+    daysWithoutActivity: uncoveredDays.length,
     timedOut,
     elapsedMs: Date.now() - startedAt,
   };
@@ -550,6 +560,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
     budget, country, destinationCity, departureAirport, activityPreferences, travelMonth, durationDays, participants,
     outboundDate,
   } = requirements;
+  const stayNights = Math.max(1, Number(durationDays) - 1);
 
   const explicitOutbound = outboundDate ? startOfUtcDay(new Date(outboundDate)) : null;
   const dateRange = explicitOutbound && !Number.isNaN(explicitOutbound.getTime())
@@ -621,7 +632,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
     if (flightPair.cost > budget) return { status: 'flight_over_budget' };
     await onProgress(45, 'Ricerca hotel');
     const hotelPick = findHotelForStay(
-      await getHotels(destinationId), checkIn, durationDays, maxHotelPrice,
+      await getHotels(destinationId), checkIn, stayNights, maxHotelPrice,
     );
     if (!hotelPick) return { status: 'no_hotel' };
 
@@ -636,7 +647,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
       flightPair.outbound.destinationAirport.city,
       activityPreferences,
       checkIn,
-      durationDays,
+      stayNights,
       participants,
       budgetAfterHotel,
     );
@@ -653,7 +664,12 @@ export async function generateItinerary(requirements, onProgress = async () => {
     }
 
     return {
-      status: 'ok',
+      status: activities.uncoveredDays.length === 0 ? 'ok' : 'activity_coverage_incomplete',
+      activityCoverage: {
+        coveredDays: activities.coveredDays,
+        uncoveredDays: activities.uncoveredDays,
+        complete: activities.uncoveredDays.length === 0,
+      },
       flights: flightPair,
       hotel: hotelPick,
       destinationMedia: getDestinationMedia(country, flightPair.outbound.destinationAirport.city),
@@ -664,6 +680,8 @@ export async function generateItinerary(requirements, onProgress = async () => {
       totalCost,
       breakdown: { flightCost: flightPair.cost, hotelCost, activityCost: activities.cost },
       compromises: allCompromises,
+      budget,
+      budgetDelta: budget - totalCost,
       withinBudget: totalCost <= budget,
     };
   };
@@ -675,7 +693,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
   let alternative = null;
   if (result.status === 'hotel_over_budget'
       || (result.status === 'ok' && !result.withinBudget)) {
-    const avgNightlyBudget = (budget - firstPair.cost) / durationDays / participants;
+    const avgNightlyBudget = (budget - firstPair.cost) / Math.max(1, durationDays - 1) / participants;
     alternative = await attempt(firstPair, Math.max(avgNightlyBudget * 0.7, 20), [
       'Selezionato hotel con fascia di prezzo inferiore per rientrare nel budget.',
     ]);
@@ -699,7 +717,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
         'Selezionata una coppia di voli alternativa con hotel compatibile.',
       ]);
       if (candidate.status === 'hotel_over_budget') {
-        const avgNightlyBudget = (budget - flightPair.cost) / durationDays / participants;
+        const avgNightlyBudget = (budget - flightPair.cost) / Math.max(1, durationDays - 1) / participants;
         candidate = await attempt(flightPair, Math.max(avgNightlyBudget * 0.7, 20), [
           'Selezionata una coppia di voli alternativa con hotel compatibile.',
           'Selezionato hotel con fascia di prezzo inferiore per rientrare nel budget.',
@@ -725,6 +743,14 @@ export async function generateItinerary(requirements, onProgress = async () => {
   }
 
   if (result.status !== 'ok' && (!alternative || alternative.status !== 'ok')) {
+    if (result.status === 'activity_coverage_incomplete') {
+      return {
+        errorCode: 'activity_coverage_incomplete',
+        error: `Nessuna proposta copre tutte le ${stayNights} giornate utili con attività disponibili entro i vincoli.`,
+        uncoveredDays: result.activityCoverage?.uncoveredDays || [],
+        alternatives: [],
+      };
+    }
     const issue = result.status === 'no_hotel'
       ? { errorCode: 'no_hotel', error: 'Nessun hotel con disponibilità continuativa per tutte le notti richieste.' }
       : { errorCode: 'hotel_over_budget', error: 'Il costo dell\'hotel, anche nella fascia più economica, supera il budget residuo dopo i voli.' };
@@ -735,5 +761,7 @@ export async function generateItinerary(requirements, onProgress = async () => {
     })) };
   }
 
-  return { primary: result.status === 'ok' ? result : null, alternative };
+  // Una proposta con copertura incompleta resta visibile solo come parziale:
+  // contiene i giorni scoperti e non puÃ² essere salvata/prenotata come completa.
+  return { primary: ['ok', 'activity_coverage_incomplete'].includes(result.status) ? result : null, alternative };
 }

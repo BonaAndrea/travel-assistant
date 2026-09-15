@@ -79,6 +79,14 @@ test('confirmation reserves every resource and sequential retry returns the same
   await expectInventory(0, 0, 2);
 });
 
+test('conferma lo snapshot attività con costo totale per due partecipanti', async () => {
+  const draft = await itinerary({
+    activities: [{ activityId: fixture.activity.id, date: date.toISOString(), name: 'Museum', cost: 20 }],
+  });
+  const result = await confirm(draft);
+  expect(result.booking.status).toBe('confirmed');
+});
+
 test('conferma rifiuta date sovrapposte a una prenotazione confermata', async () => {
   const confirmed = await itinerary({
     flights: {
@@ -190,6 +198,38 @@ test('concurrent requests for the last seats cannot overbook', async () => {
   expect(results.map(result => result.booking.status).sort()).toEqual(['confirmed', 'failed']);
   expect(await prisma.itinerary.count({ where: { status: 'confirmed' } })).toBe(1);
   await expectInventory(0, 0, 2);
+});
+
+test('concurrent overlapping itineraries are serialized even for different users', async () => {
+  const other = await prisma.user.create({ data: { email: 'other@example.test', name: 'Other', passwordHash: 'unused' } });
+  await prisma.flight.updateMany({ data: { seatsAvailable: 4 } });
+  await prisma.hotelAvailability.updateMany({ data: { roomsAvailable: 2 } });
+  await prisma.activityAvailability.updateMany({ data: { capacity: 4 } });
+  const first = await itinerary();
+  const second = await prisma.itinerary.create({ data: {
+    userId: other.id, totalCost: first.totalCost, flightCost: first.flightCost,
+    hotelCost: first.hotelCost, activityCost: first.activityCost, details: first.details,
+  } });
+  const results = await Promise.all([
+    confirmBooking({ userId: fixture.userId, itineraryId: first.id, idempotencyKey: randomUUID() }),
+    confirmBooking({ userId: other.id, itineraryId: second.id, idempotencyKey: randomUUID() }),
+  ]);
+  expect(results.map((result) => result.booking.status).sort()).toEqual(['confirmed', 'failed']);
+  expect(await prisma.booking.count({ where: { status: 'confirmed' } })).toBe(1);
+});
+
+test('confirmation rejects a changed catalog price before reserving resources', async () => {
+  const draft = await itinerary({
+    flights: {
+      outbound: { id: fixture.flights[0].id, cost: 999 },
+      inbound: { id: fixture.flights[1].id },
+    },
+  });
+  const result = await confirm(draft);
+  expect(result.booking.status).toBe('failed');
+  expect(result.booking.failureReason).toMatch(/prezzo.*volo/i);
+  expect((await prisma.itinerary.findUnique({ where: { id: draft.id } })).status).toBe('draft');
+  await expectInventory(2, 1, 0);
 });
 
 test('cancellation restores inventory and a repeated cancellation cannot release twice', async () => {

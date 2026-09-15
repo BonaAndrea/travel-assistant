@@ -827,7 +827,7 @@
         return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleDateString('it-IT') : '';
       };
       const returnDate = issue.requestedReturnDate || issue.returnDate || outbound.expectedReturnDate
-        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + duration * 86400000).toISOString() : '');
+        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + Math.max(0, duration - 1) * 86400000).toISOString() : '');
       const summary = origin && destination && formatDate(outboundDate)
         ? `**Richiesta originale**\n- Partenza usata: ${origin} → ${destination}, ${formatDate(outboundDate)}${duration > 0 ? `, ${duration} giorni` : ''}${formatDate(returnDate) ? `, ritorno atteso ${formatDate(returnDate)}` : ''}\n\n`
         : '';
@@ -893,7 +893,7 @@
         return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleDateString('it-IT') : '';
       };
       const returnDate = issue.requestedReturnDate || issue.returnDate || outbound.expectedReturnDate
-        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + duration * 86400000).toISOString() : '');
+        || (outboundDate && duration > 0 ? new Date(new Date(outboundDate).getTime() + Math.max(0, duration - 1) * 86400000).toISOString() : '');
       const tripSummary = origin && destination && formatDate(outboundDate)
         ? `Partenza usata: ${origin} → ${destination} il ${formatDate(outboundDate)}${duration > 0 ? `; durata: ${duration} giorni` : ''}${formatDate(returnDate) ? `; ritorno atteso: ${formatDate(returnDate)}` : ''}. `
         : '';

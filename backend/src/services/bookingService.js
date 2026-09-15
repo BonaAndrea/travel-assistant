@@ -180,6 +180,57 @@ function replayBooking(existing, userId, itineraryId) {
   };
 }
 
+const BOOKING_OVERLAP_LOCK = 748291;
+
+async function lockBookingOverlap(tx) {
+  // Un solo lock transazionale serializza il check business sulle date anche
+  // quando le prenotazioni usano risorse di catalogo completamente diverse.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_OVERLAP_LOCK})`;
+}
+
+function priceChanged(expected, actual) {
+  return expected !== undefined && expected !== null && Number(expected) !== Number(actual);
+}
+
+async function assertCurrentPrices(tx, itinerary) {
+  const details = bookingResourceDetails(itinerary);
+  const flightIds = [details.flights.outbound.id, details.flights.inbound.id];
+  const flights = await tx.flight.findMany({ where: { id: { in: flightIds } }, select: { id: true, cost: true } });
+  const byFlight = new Map(flights.map((flight) => [flight.id, flight]));
+  for (const flight of [details.flights.outbound, details.flights.inbound]) {
+    const current = byFlight.get(flight.id);
+    if (!current || priceChanged(flight.cost, current.cost)) {
+      throw new BookingLifecycleError('Il prezzo del volo è cambiato, aggiorna l’itinerario', 409, 'PRICE_CHANGED');
+    }
+  }
+
+  for (const night of details.hotel.nights) {
+    const current = await tx.hotelAvailability.findUnique({
+      where: { hotelId_date: { hotelId: details.hotel.id, date: new Date(night) } },
+      select: { pricePerNight: true },
+    });
+    const expected = details.hotel.prices?.[night] ?? details.hotel.pricePerNight;
+    if (!current || priceChanged(expected, current.pricePerNight)) {
+      throw new BookingLifecycleError('Il prezzo dell’hotel è cambiato, aggiorna l’itinerario', 409, 'PRICE_CHANGED');
+    }
+  }
+
+  for (const activity of details.activities) {
+    const current = activity.availabilityId
+      ? await tx.activityAvailability.findUnique({ where: { id: activity.availabilityId }, select: { cost: true } })
+      : await tx.activityAvailability.findFirst({ where: { activityId: activity.activityId, date: new Date(activity.date) }, select: { cost: true } });
+    // Lo snapshot espone il costo totale della voce (costo unitario × partecipanti),
+    // mentre ActivityAvailability conserva il costo unitario. Confrontare i valori
+    // grezzi genera un falso PRICE_CHANGED per ogni gruppo di almeno due persone.
+    const expectedUnitCost = Number.isFinite(Number(activity.cost)) && details.participants > 0
+      ? Number(activity.cost) / details.participants
+      : activity.cost;
+    if (!current || priceChanged(expectedUnitCost, current.cost)) {
+      throw new BookingLifecycleError('Il prezzo dell’attività è cambiato, aggiorna l’itinerario', 409, 'PRICE_CHANGED');
+    }
+  }
+}
+
 async function markConversationBooked(tx, itinerary) {
   if (!itinerary.conversationId) return;
   const snapshot = itinerary.details?.requirementsSnapshot;
@@ -212,10 +263,15 @@ export async function confirmBooking({ userId, itineraryId, idempotencyKey }) {
       ? 'Itinerario già prenotato' : 'Il nuovo itinerario deve essere in stato draft');
   }
 
+  // Fast-fail non transazionale; il controllo viene ripetuto sotto advisory
+  // lock nella transazione per chiudere la race tra lettura e conferma.
   await assertNoDateConflict(prisma, itinerary);
 
   try {
     const booking = await prisma.$transaction(async (tx) => {
+      await lockBookingOverlap(tx);
+      await assertNoDateConflict(tx, itinerary);
+      await assertCurrentPrices(tx, itinerary);
       const claimed = await tx.itinerary.updateMany({
         where: { id: itineraryId, userId, status: 'draft' },
         data: { status: 'confirmed' },
@@ -326,6 +382,9 @@ export async function modifyBooking({ userId, bookingId, newItineraryId }) {
     await assertNoDateConflict(prisma, newItinerary, bookingId);
 
     const result = await prisma.$transaction(async (tx) => {
+      await lockBookingOverlap(tx);
+      await assertNoDateConflict(tx, newItinerary, bookingId);
+      await assertCurrentPrices(tx, newItinerary);
       // Il confronto dello snapshot serializza modifica/cancellazione concorrenti.
       const claimed = await tx.booking.updateMany({
         where: { id: bookingId, userId, status: 'confirmed', itineraryId: booking.itineraryId },

@@ -43,6 +43,15 @@ function parseDayMonth(day, month, year = new Date().getUTCFullYear()) {
 export function extractExplicitTravelDates(value, referenceDate = new Date()) {
   const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const monthPattern = [...MONTHS_IT, ...MONTH_ALIASES.keys()].join('|');
+  // Valuta prima l'intervallo con due mesi/date completi: altrimenti il
+  // parser abbreviato può iniziare dal numero dell'anno (es. "2026").
+  const namedFirst = text.match(new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?\\s*(?:-|a|al|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
+  if (namedFirst) {
+    const departure = parseDayMonth(namedFirst[1], namedFirst[2], namedFirst[3] || referenceDate.getUTCFullYear());
+    const returnYear = namedFirst[6] || namedFirst[3] || referenceDate.getUTCFullYear();
+    const returnDate = parseDayMonth(namedFirst[4], namedFirst[5], returnYear);
+    if (departure && returnDate) return { departure, returnDate };
+  }
   const abbreviated = text.match(new RegExp(`(?:dal[^0-9]{0,4})?(\\d{1,2})\\s*(?:-|–|—|al|a|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
   if (abbreviated) {
     const departure = parseDayMonth(abbreviated[1], abbreviated[3], abbreviated[4] || referenceDate.getUTCFullYear());
@@ -71,6 +80,24 @@ export function extractExplicitDuration(value) {
   if (!match) return null;
   const durationDays = Number(match[1]);
   return Number.isInteger(durationDays) && durationDays > 0 && durationDays <= 60 ? durationDays : null;
+}
+
+/** Estrae i valori numerici dichiarati dall'utente, senza delegarli al provider. */
+export function extractExplicitBudget(value) {
+  const text = String(value || '').replace(/\./g, '').replace(/,/g, '.');
+  const match = text.match(/(?:budget|spesa|spendere|costo)[^0-9]{0,20}(\d+(?:\.\d{1,2})?)/i)
+    || text.match(/\b(\d+(?:\.\d{1,2})?)\s*(?:€|euro)\b/i);
+  if (!match) return null;
+  const budget = Number(match[1]);
+  return Number.isFinite(budget) && budget > 0 ? budget : null;
+}
+
+export function extractExplicitParticipants(value) {
+  const text = String(value || '');
+  const match = text.match(/\b(\d{1,2})\s*(?:persone|partecipanti|adulti)\b/i);
+  if (!match) return null;
+  const participants = Number(match[1]);
+  return Number.isInteger(participants) && participants > 0 ? participants : null;
 }
 
 /** Intervallo numerico privo di mese/anno (es. "1-6"): non è una durata. */
