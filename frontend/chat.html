@@ -1223,7 +1223,11 @@
 
     function syncVisualViewport() {
       if (typeof window === 'undefined' || !window.visualViewport) return;
-      document.documentElement.style.setProperty('--visual-viewport-height', `${Math.round(window.visualViewport.height)}px`);
+      const visualHeight = Math.round(window.visualViewport.height);
+      document.documentElement.style.setProperty('--visual-viewport-height', `${visualHeight}px`);
+      const keyboardOpen = typeof window.innerHeight === 'number'
+        && window.innerHeight - visualHeight > 150;
+      document.body.classList.toggle('keyboard-open', keyboardOpen);
     }
 
     syncVisualViewport();

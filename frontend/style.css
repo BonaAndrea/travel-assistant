@@ -264,3 +264,16 @@ h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hy
 .booking-detail .booking-share-actions button.secondary:hover,.history-detail .history-delete:hover{
   background:var(--surface);border-color:var(--color-focus);color:var(--color-ink)
 }
+
+/* When iOS opens the keyboard, visualViewport becomes the real layout budget.
+   Keep the composer docked to its lower edge and let only the transcript scroll. */
+@media (max-width:800px){
+  body.chat-page.keyboard-open{min-height:var(--visual-viewport-height,100dvh);padding-bottom:0}
+  body.chat-page.keyboard-open .chat-shell{
+    height:calc(var(--visual-viewport-height,100dvh) - 18px);
+    max-height:none;
+    margin-bottom:0;
+  }
+  body.chat-page.keyboard-open .chat-log{min-height:0}
+  body.chat-page.keyboard-open .chat-composer{scroll-margin-bottom:12px}
+}
