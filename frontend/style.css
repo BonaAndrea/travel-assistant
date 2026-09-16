@@ -270,10 +270,25 @@ h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hy
 @media (max-width:800px){
   body.chat-page.keyboard-open{min-height:var(--visual-viewport-height,100dvh);padding-bottom:0}
   body.chat-page.keyboard-open .chat-shell{
-    height:calc(var(--visual-viewport-height,100dvh) - 18px);
+    height:auto;
+    min-height:0;
     max-height:none;
     margin-bottom:0;
+    overflow:visible;
   }
-  body.chat-page.keyboard-open .chat-log{min-height:0}
-  body.chat-page.keyboard-open .chat-composer{scroll-margin-bottom:12px}
+  body.chat-page.keyboard-open .chat-log{
+    height:min(34vh,calc(var(--visual-viewport-height,100dvh) - 390px));
+    min-height:96px;
+    max-height:none;
+  }
+  body.chat-page.keyboard-open .chat-composer{
+    position:sticky;
+    bottom:0;
+    z-index:10;
+    margin-inline:-14px;
+    padding:8px 14px;
+    background:rgba(255,253,248,.98);
+    box-shadow:0 -8px 18px rgba(20,52,58,.08);
+    scroll-margin-bottom:12px;
+  }
 }
