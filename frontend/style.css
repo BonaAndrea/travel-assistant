@@ -176,3 +176,34 @@ button.secondary:hover:not(:disabled){background:var(--color-rule);color:var(--c
 @media (min-width:414px) and (max-width:599px){main{max-width:100%}.page-intro{max-width:58ch}.card{padding:var(--space-lg)}}
 @media (min-width:768px) and (max-width:800px){body{padding-inline:var(--space-lg)}nav a:not(.brand-lockup){flex:0 1 auto}.history-layout,#bookings.booking-layout{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}}
+
+/* Hallmark correction pass · contrast, hierarchy and responsive balance. */
+.auth-visual{min-height:480px}
+.auth-visual h1{max-width:16ch;margin-top:var(--space-2xl);font-size:clamp(3rem,6vw,5.4rem);line-height:.92}
+.auth-visual p{color:var(--color-paper-2)}
+.auth-stamp{color:var(--color-focus)}
+.booking-detail{background:var(--surface);color:var(--color-ink)}
+.booking-detail .booking-detail-header,.history-detail .history-detail-header{background:var(--surface);color:var(--color-ink)}
+.booking-detail .booking-detail-content,.booking-detail .booking-detail-content strong,.booking-detail .booking-detail-content small{color:var(--color-ink)}
+.booking-detail .booking-detail-content .booking-id,.booking-detail .booking-detail-content .cost-breakdown,.booking-detail .booking-detail-content .created-date{color:var(--color-ink-2)}
+.booking-detail .booking-detail-content a{color:var(--color-ink)}
+.booking-detail .booking-detail-actions button.secondary{background:var(--color-paper-2);color:var(--color-ink);border-color:var(--color-rule)}
+.booking-detail .booking-detail-actions button.secondary:hover:not(:disabled){background:var(--color-ink);color:var(--color-accent-ink)}
+.booking-detail .booking-share-actions button.secondary{background:var(--color-paper-2);color:var(--color-ink)}
+.history-detail-heading,.booking-detail-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:var(--space-md);min-width:0}
+.history-detail-heading h2,.booking-detail-heading h2{min-width:0;overflow-wrap:anywhere}
+.history-detail-actions,.booking-detail-actions{display:flex;align-items:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:var(--space-2xs);min-width:0}
+.history-detail-actions>* ,.booking-detail-actions>*{min-width:9.5rem;white-space:normal;overflow-wrap:anywhere}
+@media (max-width:800px){
+  .auth-visual{min-height:0;padding:var(--space-md)}
+  .auth-visual h1{max-width:none;margin-top:var(--space-lg);font-size:clamp(2.2rem,11vw,3.8rem);line-height:.94}
+  .history-detail-heading,.booking-detail-heading{grid-template-columns:1fr;gap:var(--space-sm)}
+  .history-detail-actions,.booking-detail-actions{width:100%;justify-content:stretch}
+  .history-detail-actions>* ,.booking-detail-actions>*{flex:1 1 12rem;min-width:0;width:auto}
+}
+@media (max-width:375px){
+  .auth-visual h1{font-size:clamp(2rem,10.5vw,2.7rem)}
+  .history-detail-heading,.booking-detail-heading{gap:var(--space-xs)}
+  .history-detail-actions,.booking-detail-actions{flex-direction:column}
+  .history-detail-actions>* ,.booking-detail-actions>*{width:100%;flex:0 1 auto}
+}
