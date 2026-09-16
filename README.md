@@ -1,8 +1,13 @@
 # Travel Assistant — Assistente Virtuale per Viaggi Personalizzati
 
-Coding challenge: assistente conversazionale per generare e prenotare itinerari di viaggio
-personalizzati, con raccolta requisiti multi-turno, generazione itinerario (voli + hotel +
-attività) rispettando budget/preferenze/coerenza temporale, e booking transazionale.
+Travel Assistant è un assistente conversazionale per raccogliere i requisiti di viaggio,
+proporre itinerari personalizzati e accompagnare l'utente fino alla prenotazione.
+La conversazione è multi-turno: l'utente può completare o modificare le proprie preferenze,
+confermare la proposta e prenotare voli, hotel e attività all'interno dello stesso percorso.
+
+Il progetto è stato realizzato come coding challenge, con un catalogo locale seedato e
+un'architettura pensata per rendere espliciti i principali aspetti applicativi: validazione,
+RAG, autenticazione, concorrenza, transazioni e gestione degli errori.
 
 ## Stack scelto
 
@@ -39,9 +44,9 @@ attività) rispettando budget/preferenze/coerenza temporale, e booking transazio
   del click "Prenota". Un invio ripetuto della stessa richiesta ritorna la prenotazione già
   creata invece di crearne una seconda.
 
- - **Overlap e prezzo al commit**: la conferma acquisisce un advisory lock PostgreSQL
+- **Overlap e prezzo al commit**: la conferma acquisisce un advisory lock PostgreSQL
   transazionale, ricontrolla le date contro le prenotazioni confermate e rilegge i prezzi
-  correnti di voli, hotel e attivitÃ . Un cambio prezzo restituisce `PRICE_CHANGED` e annulla
+  correnti di voli, hotel e attività. Un cambio prezzo restituisce `PRICE_CHANGED` e annulla
   l'intera transazione.
 
 ## Setup
@@ -87,7 +92,7 @@ Poi apri `frontend/index.html` nel browser (senza Docker, serve un server static
 
 ### Seed demo: comando, impatto e precondizioni
 
-Il seed e destinato a un database demo isolato. Prima di eseguirlo verificare che PostgreSQL
+Il seed è destinato a un database demo isolato. Prima di eseguirlo verificare che PostgreSQL
 sia raggiungibile, che `DATABASE_URL` punti al database corretto e che lo schema sia aggiornato:
 
 ```bash
@@ -97,18 +102,28 @@ npm run prisma:generate
 npm run seed
 ```
 
-`npm run seed` e distruttivo per i dati applicativi del database indicato: elimina messaggi,
-booking, itinerari, job, conversazioni e il catalogo voli/hotel/attivita con le disponibilita,
-poi ricrea il catalogo deterministico multi-citta e l'indice RAG. Non eseguirlo su un database
+`npm run seed` è distruttivo per i dati applicativi del database indicato: elimina messaggi,
+booking, itinerari, job, conversazioni e il catalogo voli/hotel/attività con le disponibilità,
+poi ricrea il catalogo deterministico multi-città e l'indice RAG. Non eseguirlo su un database
 con dati utente senza backup e approvazione esplicita. Dopo il seed va riavviato il backend per
 svuotare eventuali cache locali e va verificato che lo storage immagini punti alla directory
-prevista. Nel checkout condiviso il comando non e stato eseguito.
+prevista. Nel checkout condiviso il comando non è stato eseguito.
 
-### Percorso demo showcase
+### Demo rapida
 
-Per una demo di pochi minuti: registra un account demo, apri **Chat** e inserisci una richiesta completa (destinazione, mese, budget, partecipanti, aeroporto di partenza e durata). Conferma i requisiti quando l’assistente li riepiloga; attendi il job asincrono e confronta proposta e alternativa. Prenota una delle due opzioni, poi apri **Le mie prenotazioni** per mostrare dettaglio, stato e azioni. **Storico** consente di riprendere la conversazione e rende visibile la continuità del percorso.
+1. Avvia il progetto e crea un account.
+2. Apri **Chat** e inserisci una richiesta completa, ad esempio:
 
-Gli stati di rete e job espongono sempre un messaggio leggibile e un’azione di riprova quando è sicuro farlo. La modalità demo usa gli stessi flussi autenticati della produzione: non esistono bypass o dati demo impliciti nel frontend.
+   > Vorrei andare in Spagna a [mese disponibile], budget 1500€ per 2 persone,
+   > 5 giorni, partenza da FCO, con preferenza per cultura e relax.
+
+3. Conferma i requisiti riepilogati dall’assistente.
+4. Attendi la generazione dell’itinerario e confronta proposta e alternativa.
+5. Prenota una delle opzioni e verifica il risultato nella sezione **Le mie prenotazioni**.
+6. Usa **Storico** per riprendere una conversazione precedente.
+
+Il percorso demo utilizza gli stessi flussi autenticati dell’applicazione: non sono presenti
+bypass o dati demo impliciti nel frontend.
 
 ### Matrice browser/viewport verificata
 
@@ -163,7 +178,7 @@ in console. Prova in chat qualcosa come:
 L'assistente chiederà eventuali dati mancanti, riepilogherà, e alla conferma genererà
 l'itinerario (con alternativa se il budget stretto non fosse rispettabile).
 
-## Iterazione 2 — miglioramenti algoritmo ed edge case
+## Dettagli tecnici e casi limite gestiti
 
 - **Coerenza temporale volo/soggiorno**: il volo di ritorno ora viene cercato garantendo
   il giorno UTC esatto dell'andata più `durationDays`, senza lasciare notti scoperte.
