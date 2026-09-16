@@ -207,3 +207,18 @@ button.secondary:hover:not(:disabled){background:var(--color-rule);color:var(--c
   .history-detail-actions,.booking-detail-actions{flex-direction:column}
   .history-detail-actions>* ,.booking-detail-actions>*{width:100%;flex:0 1 auto}
 }
+
+/* Hallmark final polish · balanced titles and distinct selection states. */
+h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hyphens:none}
+.booking-detail-heading h2,.history-detail-heading h2{font-size:clamp(1.45rem,2.6vw,2.1rem);line-height:1.05;max-width:24ch}
+.booking-card strong,.history-item strong{min-width:0;text-wrap:balance;overflow-wrap:anywhere}
+.booking-card.is-selected,.history-item.is-selected{border-color:var(--color-focus);background:var(--color-paper-2);box-shadow:inset 0 0 0 var(--rule-strong) var(--color-accent)}
+.booking-card.is-selected strong,.history-item.is-selected strong{color:var(--color-ink)}
+.booking-card-hint,.history-status{color:var(--color-accent);font-weight:800}
+.history-status.badge.confirmed,.booking-detail .badge.confirmed{background:var(--color-accent);color:var(--color-accent-ink)}
+@media (max-width:800px){
+  .booking-detail-heading h2,.history-detail-heading h2{max-width:22ch;font-size:clamp(1.45rem,5.5vw,1.9rem)}
+}
+@media (max-width:375px){
+  .booking-detail-heading h2,.history-detail-heading h2{max-width:none;font-size:1.5rem}
+}
