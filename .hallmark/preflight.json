@@ -1,0 +1,11 @@
+{
+  "date": "2026-09-16",
+  "framework": "vanilla HTML/CSS/ES modules",
+  "fontStack": "Georgia + Inter/system sans in existing CSS; migrated to tokenized Fraunces/Segoe UI fallbacks",
+  "palette": "petrol, coral, mint, warm paper; migrated to OKLCH tokens",
+  "motion": "no motion dependency; CSS transitions only",
+  "spacing": "existing mixed scale; normalized new layer to named 4-point tokens",
+  "pages": ["index.html", "chat.html", "dashboard.html", "history.html", "share.html"],
+  "preserved": ["routes", "copy", "API", "auth", "fetch", "storage", "HTML structure"],
+  "introduced": ["shared design.md", "tokens.css", "Workbench app layer", "mobile overflow and focus safeguards"]
+}

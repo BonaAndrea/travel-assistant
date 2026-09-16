@@ -1,4 +1,9 @@
-:root{color-scheme:light;--ink:#17343a;--ink-soft:#315960;--muted:#61767a;--line:#cad9d5;--canvas:#f3efe6;--surface:#fffdf8;--petrol:#0b5962;--petrol-dark:#073940;--coral:#c8553d;--sun:#f4c46e;--mint:#dceee8;--danger:#9d3039;--success:#17634f;--shadow:0 18px 45px rgba(20,52,58,.10);--radius:6px;--radius-sm:3px}
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R4 V4
+ * genre: editorial-functional · macrostructure: Workbench · design-system: design.md · designed-as-app
+ * theme: paper-and-coral · enrichment: none · app pages
+ */
+@import url("tokens.css");
+:root{color-scheme:light;--ink:var(--color-ink);--ink-soft:var(--color-ink-2);--muted:oklch(48% .035 195);--line:var(--color-rule);--canvas:var(--color-paper);--surface:oklch(99% .008 92);--petrol:oklch(48% .12 195);--petrol-dark:var(--color-ink);--coral:var(--color-accent);--sun:var(--color-focus);--mint:var(--color-paper-2);--danger:var(--color-danger);--success:var(--color-success);--shadow:var(--shadow-card);--radius:var(--radius-card);--radius-sm:var(--radius-input)}
 *{box-sizing:border-box}html{min-width:320px;scroll-behavior:smooth}body{max-width:1280px;min-height:100vh;margin:0 auto;padding:22px 34px 80px;background:radial-gradient(circle at 8% 4%,rgba(220,238,232,.8),transparent 27rem),var(--canvas);color:var(--ink);font:16px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{min-width:0}h1,h2,h3{line-height:1.08;letter-spacing:-.045em}h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:600}h1{max-width:920px;margin:14px 0 20px;font-size:clamp(2.5rem,6vw,5.4rem)}h2{margin:0 0 14px;font-size:clamp(1.45rem,2vw,2rem)}h3{margin:24px 0 10px;font-size:1rem;letter-spacing:-.01em}p{margin:0 0 14px}a{color:var(--petrol);font-weight:800}.muted{color:var(--muted)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.eyebrow,.page-kicker{margin:0 0 9px;color:var(--coral);font-size:.7rem;font-weight:900;letter-spacing:.17em;text-transform:uppercase}.page-intro{max-width:650px;margin:-8px 0 34px;color:var(--muted);font-size:1.02rem}
 nav{display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin:0 0 62px;padding:0 0 12px;border-bottom:2px solid var(--petrol-dark)}.brand-lockup{display:inline-flex;align-items:center;gap:10px;margin-right:28px;color:var(--petrol-dark);text-decoration:none;font-weight:900;letter-spacing:-.03em}.brand-lockup svg{width:34px;height:34px;flex:none}.brand-lockup small{display:block;color:var(--muted);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase}nav a:not(.brand-lockup){padding:11px 13px 9px;border-bottom:3px solid transparent;color:var(--muted);text-decoration:none;font-size:.86rem;font-weight:850}nav a:not(.brand-lockup):hover,nav a:not(.brand-lockup):focus-visible,nav a[aria-current="page"]{border-bottom-color:var(--coral);color:var(--petrol-dark)}nav a:last-child{margin-left:auto;color:var(--coral)}.nav-new-chat{min-height:48px;margin:0 6px;padding:10px 15px;border:1px solid var(--coral);border-radius:var(--radius-sm);background:transparent;color:var(--coral);font-size:.86rem}.nav-new-chat:hover:not(:disabled),.nav-new-chat:focus-visible{background:var(--coral);color:#fff}.nav-new-chat:focus-visible{outline-color:var(--sun)}
 .card{margin-bottom:20px;padding:30px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.card>:last-child{margin-bottom:0}.media{margin:-30px -30px 24px;overflow:hidden;background:#dce8e5;border-radius:var(--radius) var(--radius) 0 0}.media img{display:block;width:100%;aspect-ratio:16/8;object-fit:cover}.media figcaption{padding:8px 16px;color:var(--muted);font-size:.72rem}.media figcaption a{color:inherit}.activity-list{display:grid;gap:12px;padding:0;list-style:none}.activity-item{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;align-items:center}.activity-media{margin:0;border-radius:var(--radius-sm)}.activity-media img{aspect-ratio:3/2}
@@ -115,3 +120,147 @@ input,select,button,textarea{width:100%;min-height:48px;margin:6px 0;padding:12p
 .share-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:18px}.share-toolbar button{min-height:44px}.group-vote{margin-top:24px;padding:16px;border:1px solid var(--line);background:var(--mint);border-radius:var(--radius-sm)}.group-vote h3{margin:0 0 4px}.group-vote ul{display:grid;gap:8px;padding:0;list-style:none}.group-vote li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.vote-button{min-height:42px}.group-vote #vote-status{min-height:1.2em;color:var(--petrol-dark);font-weight:600}@media print{nav,.share-toolbar,.group-vote button{display:none!important}body{background:#fff;padding:0}.card{box-shadow:none;border:1px solid #ddd}}
 .extras-switch{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 10px;color:var(--petrol-dark);font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}.extras-switch input{position:absolute;opacity:0;width:1px;height:1px}.extras-switch-track{position:relative;width:44px;height:26px;border-radius:999px;background:#b8c9c8;box-shadow:inset 0 0 0 1px rgba(7,63,69,.18);transition:background .18s ease}.extras-switch-track span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(7,63,69,.28);transition:transform .18s ease}.extras-switch input:checked+.extras-switch-track{background:var(--coral)}.extras-switch input:checked+.extras-switch-track span{transform:translateX(18px)}.extras-switch input:focus-visible+.extras-switch-track{outline:3px solid var(--sun);outline-offset:3px}.extras-switch:hover .extras-switch-track{filter:brightness(.97)}
 @media (max-width:800px){.extras-switch{order:5;flex:0 0 auto;padding:0 8px;font-size:.75rem}.extras-switch-track{width:42px;height:25px}.extras-switch-track span{width:19px;height:19px}.extras-switch input:checked+.extras-switch-track span{transform:translateX(17px)}}
+
+/* Hallmark shared app layer · existing DOM and behaviour remain unchanged. */
+html,body{overflow-x:clip}
+body{max-width:1320px;padding:var(--space-lg) clamp(var(--space-sm),4vw,var(--space-2xl)) var(--space-3xl);background:var(--color-paper);font-family:var(--font-body);color:var(--color-ink)}
+main{max-width:1120px;margin-inline:auto}
+h1,h2,h3{font-family:var(--font-display);font-style:normal;letter-spacing:-.035em;color:var(--color-ink)}
+h1{max-width:18ch;margin:var(--space-xs) 0 var(--space-md);font-size:var(--text-2xl);line-height:.98;overflow-wrap:anywhere}
+h2{font-size:clamp(1.55rem,3vw,2.35rem);line-height:1.02}
+p{max-width:68ch}
+nav{display:flex;align-items:center;gap:var(--space-2xs);margin:0 auto var(--space-2xl);padding:0 0 var(--space-sm);border-bottom:var(--rule-strong) solid var(--color-ink);max-width:1320px}
+.brand-lockup{gap:var(--space-xs);margin-right:auto;color:var(--color-ink);font-family:var(--font-display);font-size:1.1rem;letter-spacing:-.025em}
+.brand-lockup svg{width:2.25rem;height:2.25rem;color:var(--color-accent)}
+.brand-lockup small{font-family:var(--font-body);color:var(--color-ink-2);font-size:var(--text-xs);letter-spacing:.08em}
+nav a:not(.brand-lockup){padding:var(--space-2xs) var(--space-xs);border-bottom:var(--rule-strong) solid transparent;color:var(--color-ink-2);font-size:var(--text-sm);font-weight:700;white-space:nowrap}
+nav a:not(.brand-lockup):hover,nav a:not(.brand-lockup):focus-visible,nav a[aria-current=page]{border-bottom-color:var(--color-accent);color:var(--color-ink)}
+nav a:last-child{margin-left:var(--space-sm);color:var(--color-accent)}
+.page-kicker,.eyebrow{color:var(--color-accent);font-family:var(--font-mono);font-size:var(--text-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.page-intro{max-width:54ch;margin:-.4rem 0 var(--space-xl);color:var(--color-ink-2);font-size:var(--text-md);line-height:1.45}
+.card{margin-bottom:var(--space-md);padding:clamp(var(--space-md),3vw,var(--space-xl));border:var(--rule-hairline) solid var(--color-rule);border-radius:var(--radius-card);background:var(--surface);box-shadow:var(--shadow-card)}
+input,select,button,textarea{min-height:3rem;margin:var(--space-2xs) 0;padding:var(--space-xs) var(--space-sm);border:var(--rule-hairline) solid var(--color-rule);border-radius:var(--radius-input);background:var(--surface);color:var(--color-ink);font-family:var(--font-body)}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--color-focus);outline-offset:3px}
+button{border:var(--rule-hairline) solid var(--color-accent);background:var(--color-accent);color:var(--color-accent-ink);font-weight:750;transition:background var(--dur-short) var(--ease-out),transform var(--dur-short) var(--ease-out)}
+button:hover:not(:disabled){background:var(--color-ink);box-shadow:none;transform:translateY(-1px)}
+button:active:not(:disabled){transform:translateY(0)}
+button.secondary{border-color:var(--color-rule);background:var(--color-paper-2);color:var(--color-ink)}
+button.secondary:hover:not(:disabled){background:var(--color-rule);color:var(--color-ink)}
+.chat-shell{border-top:var(--rule-strong) solid var(--color-accent);box-shadow:none}
+.chat-header{align-items:end;margin-bottom:var(--space-sm);padding-bottom:var(--space-sm);border-bottom:var(--rule-hairline) solid var(--color-rule)}
+.chat-header-kicker{font-family:var(--font-mono);color:var(--color-accent);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase}
+.chat-log{gap:var(--space-sm);padding:var(--space-xs) 0}
+.msg{border-radius:var(--radius-card);line-height:1.5}
+.msg.user{background:var(--color-ink);color:var(--color-accent-ink)}
+.msg.assistant{border-color:var(--color-rule);background:var(--color-paper-2)}
+.generation-status{border-left:var(--rule-strong) solid var(--color-accent)}
+#itinerary-container,#bookings{gap:var(--space-md)}
+#itinerary-container>.card:first-child,#bookings>.card{border-top:var(--rule-strong) solid var(--color-accent)}
+.history-layout,#bookings.booking-layout{gap:var(--space-lg)}
+.history-list-panel,.booking-list-panel{padding-top:var(--space-2xs);border-top:var(--rule-strong) solid var(--color-ink)}
+.history-item,.booking-card{border-color:var(--color-rule);border-top:var(--rule-hairline) solid var(--color-rule);border-radius:var(--radius-input);background:transparent}
+.history-item:hover,.history-item:focus-visible,.booking-card:hover,.booking-card:focus-visible,.booking-card.is-selected{border-color:var(--color-accent);background:var(--color-paper-2);box-shadow:none}
+.auth-page{max-width:1120px;margin:clamp(var(--space-lg),8vh,var(--space-3xl)) auto 0}
+.auth-layout{gap:var(--space-lg)}
+.auth-visual{min-height:560px;padding:clamp(var(--space-lg),5vw,var(--space-3xl));background:var(--color-ink);box-shadow:none}
+.auth-visual h1{max-width:11ch;margin-top:var(--space-3xl);font-size:clamp(3rem,7vw,6.4rem);line-height:.9}
+.auth-visual h1 em{color:var(--color-focus);font-style:normal}
+.auth-forms{gap:var(--space-sm)}
+.auth-forms .card{border-top:var(--rule-strong) solid var(--color-accent);box-shadow:none}
+.auth-mode{border-color:var(--color-rule);border-radius:var(--radius-input);background:var(--color-paper-2)}
+.auth-mode-btn.is-active,.auth-mode-btn[aria-selected=true]{background:var(--color-ink);box-shadow:none}
+.share-itinerary,.group-vote{border-color:var(--color-rule);border-radius:var(--radius-card);background:var(--color-paper-2)}
+.feedback{border-left-color:currentColor;background:var(--color-paper-2)}
+@media (max-width:800px){body{padding:var(--space-sm) var(--space-sm) var(--space-2xl)}nav{gap:var(--space-3xs);margin-bottom:var(--space-xl);padding-bottom:var(--space-xs)}nav .brand-lockup{flex:1 0 100%;margin-bottom:var(--space-2xs)}nav a:not(.brand-lockup){flex:1 1 auto;padding-inline:var(--space-2xs);text-align:center}nav a:last-child{margin-left:0}h1{font-size:clamp(2.5rem,13vw,4.5rem)}.auth-page{margin-top:var(--space-sm)}.auth-visual{min-height:0;padding:var(--space-md)}.auth-visual h1{margin-top:var(--space-xl);font-size:clamp(2.5rem,14vw,4.4rem)}.history-layout,#bookings.booking-layout{grid-template-columns:1fr}}
+@media (max-width:375px){nav a:not(.brand-lockup){font-size:.74rem}.page-intro{font-size:1rem}.card{padding:var(--space-md)}.chat-header{align-items:start;flex-direction:column}.chat-header button{width:100%}}
+@media (min-width:414px) and (max-width:599px){main{max-width:100%}.page-intro{max-width:58ch}.card{padding:var(--space-lg)}}
+@media (min-width:768px) and (max-width:800px){body{padding-inline:var(--space-lg)}nav a:not(.brand-lockup){flex:0 1 auto}.history-layout,#bookings.booking-layout{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}}
+
+/* Hallmark correction pass · contrast, hierarchy and responsive balance. */
+.auth-visual{min-height:480px}
+.auth-visual h1{max-width:16ch;margin-top:var(--space-2xl);font-size:clamp(3rem,6vw,5.4rem);line-height:.92}
+.auth-visual p{color:var(--color-paper-2)}
+.auth-stamp{color:var(--color-focus)}
+.booking-detail{background:var(--surface);color:var(--color-ink)}
+.booking-detail .booking-detail-header,.history-detail .history-detail-header{background:var(--surface);color:var(--color-ink)}
+.booking-detail .booking-detail-content,.booking-detail .booking-detail-content strong,.booking-detail .booking-detail-content small{color:var(--color-ink)}
+.booking-detail .booking-detail-content .booking-id,.booking-detail .booking-detail-content .cost-breakdown,.booking-detail .booking-detail-content .created-date{color:var(--color-ink-2)}
+.booking-detail .booking-detail-content a{color:var(--color-ink)}
+.booking-detail .booking-detail-actions button.secondary{background:var(--color-paper-2);color:var(--color-ink);border-color:var(--color-rule)}
+.booking-detail .booking-detail-actions button.secondary:hover:not(:disabled){background:var(--color-ink);color:var(--color-accent-ink)}
+.booking-detail .booking-share-actions button.secondary{background:var(--color-paper-2);color:var(--color-ink)}
+.history-detail-heading,.booking-detail-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:var(--space-md);min-width:0}
+.history-detail-heading h2,.booking-detail-heading h2{min-width:0;overflow-wrap:anywhere}
+.history-detail-actions,.booking-detail-actions{display:flex;align-items:flex-start;justify-content:flex-end;flex-wrap:wrap;gap:var(--space-2xs);min-width:0}
+.history-detail-actions>* ,.booking-detail-actions>*{min-width:9.5rem;white-space:normal;overflow-wrap:anywhere}
+@media (max-width:800px){
+  .auth-visual{min-height:0;padding:var(--space-md)}
+  .auth-visual h1{max-width:none;margin-top:var(--space-lg);font-size:clamp(2.2rem,11vw,3.8rem);line-height:.94}
+  .history-detail-heading,.booking-detail-heading{grid-template-columns:1fr;gap:var(--space-sm)}
+  .history-detail-actions,.booking-detail-actions{width:100%;justify-content:stretch}
+  .history-detail-actions>* ,.booking-detail-actions>*{flex:1 1 12rem;min-width:0;width:auto}
+}
+@media (max-width:375px){
+  .auth-visual h1{font-size:clamp(2rem,10.5vw,2.7rem)}
+  .history-detail-heading,.booking-detail-heading{gap:var(--space-xs)}
+  .history-detail-actions,.booking-detail-actions{flex-direction:column}
+  .history-detail-actions>* ,.booking-detail-actions>*{width:100%;flex:0 1 auto}
+}
+
+/* Hallmark final polish · balanced titles and distinct selection states. */
+h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hyphens:none}
+.booking-detail-heading h2,.history-detail-heading h2{font-size:clamp(1.45rem,2.6vw,2.1rem);line-height:1.05;max-width:24ch}
+.booking-card strong,.history-item strong{min-width:0;text-wrap:balance;overflow-wrap:anywhere}
+.booking-card.is-selected,.history-item.is-selected{border-color:var(--color-focus);background:var(--color-paper-2);box-shadow:inset 0 0 0 var(--rule-strong) var(--color-accent)}
+.booking-card.is-selected strong,.history-item.is-selected strong{color:var(--color-ink)}
+.booking-card-hint,.history-status{color:var(--color-accent);font-weight:800}
+.history-status.badge.confirmed,.booking-detail .badge.confirmed{background:var(--color-accent);color:var(--color-accent-ink)}
+@media (max-width:800px){
+  .booking-detail-heading h2,.history-detail-heading h2{max-width:22ch;font-size:clamp(1.45rem,5.5vw,1.9rem)}
+}
+@media (max-width:375px){
+  .booking-detail-heading h2,.history-detail-heading h2{max-width:none;font-size:1.5rem}
+}
+
+/* Hallmark selection correction · explicit surface/text/accent separation. */
+.booking-card.is-selected,.history-item.is-selected,
+.booking-card.is-selected:hover,.history-item.is-selected:hover,
+.booking-card.is-selected:focus-visible,.history-item.is-selected:focus-visible{
+  background:var(--color-paper-2);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-card.is-selected strong,.history-item.is-selected strong{color:var(--color-ink)}
+.booking-card.is-selected .booking-card-meta,.history-item.is-selected small{color:var(--color-ink-2)}
+.booking-card.is-selected .booking-card-hint{color:var(--color-accent)}
+.booking-card.is-selected:focus-visible,.history-item.is-selected:focus-visible{outline:3px solid var(--color-focus);outline-offset:3px}
+.booking-detail,.booking-detail.is-selected,.history-detail,.history-detail.is-selected{background:var(--surface);color:var(--color-ink)}
+.booking-detail h2,.history-detail h2{color:var(--color-ink)}
+.booking-detail .badge.confirmed,.history-detail .badge.confirmed,.history-detail .history-status{background:var(--color-accent);color:var(--color-accent-ink)}
+.booking-detail a,.history-detail a{color:var(--color-ink)}
+.booking-detail a:hover,.history-detail a:hover{color:var(--color-accent)}
+
+/* Hallmark hover correction · highlight stays separate from readable content. */
+.booking-card:hover:not(:focus-visible),.history-item:hover:not(:focus-visible){
+  background:var(--surface);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-card:hover:not(:focus-visible) strong,.history-item:hover:not(:focus-visible) strong{color:var(--color-ink)}
+.booking-card:hover:not(:focus-visible) .booking-card-meta,.history-item:hover:not(:focus-visible) small{color:var(--color-ink-2)}
+.booking-card:hover:not(:focus-visible) .booking-card-hint{color:var(--color-accent)}
+.booking-card:focus-visible,.history-item:focus-visible{
+  background:var(--surface);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  outline:3px solid var(--color-focus);
+  outline-offset:3px;
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-detail a:hover,.history-detail a:hover{color:var(--color-ink);text-decoration-color:var(--color-accent)}
+.booking-detail .booking-share-actions button.secondary:hover,.history-detail .history-delete:hover{
+  background:var(--surface);border-color:var(--color-focus);color:var(--color-ink)
+}
