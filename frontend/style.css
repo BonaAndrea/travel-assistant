@@ -222,3 +222,22 @@ h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hy
 @media (max-width:375px){
   .booking-detail-heading h2,.history-detail-heading h2{max-width:none;font-size:1.5rem}
 }
+
+/* Hallmark selection correction · explicit surface/text/accent separation. */
+.booking-card.is-selected,.history-item.is-selected,
+.booking-card.is-selected:hover,.history-item.is-selected:hover,
+.booking-card.is-selected:focus-visible,.history-item.is-selected:focus-visible{
+  background:var(--color-paper-2);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-card.is-selected strong,.history-item.is-selected strong{color:var(--color-ink)}
+.booking-card.is-selected .booking-card-meta,.history-item.is-selected small{color:var(--color-ink-2)}
+.booking-card.is-selected .booking-card-hint{color:var(--color-accent)}
+.booking-card.is-selected:focus-visible,.history-item.is-selected:focus-visible{outline:3px solid var(--color-focus);outline-offset:3px}
+.booking-detail,.booking-detail.is-selected,.history-detail,.history-detail.is-selected{background:var(--surface);color:var(--color-ink)}
+.booking-detail h2,.history-detail h2{color:var(--color-ink)}
+.booking-detail .badge.confirmed,.history-detail .badge.confirmed,.history-detail .history-status{background:var(--color-accent);color:var(--color-accent-ink)}
+.booking-detail a,.history-detail a{color:var(--color-ink)}
+.booking-detail a:hover,.history-detail a:hover{color:var(--color-accent)}
