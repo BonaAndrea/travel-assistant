@@ -180,7 +180,7 @@ l'itinerario (con alternativa se il budget stretto non fosse rispettabile).
 
 ## Dettagli tecnici e casi limite gestiti
 
-- **Coerenza temporale volo/soggiorno**: il volo di ritorno ora viene cercato garantendo
+- **Coerenza temporale volo/soggiorno**: il volo di ritorno viene cercato garantendo
   il giorno UTC esatto dell'andata più `durationDays`, senza lasciare notti scoperte.
   Il modello attuale interpreta `durationDays` come numero di pernottamenti: per esempio,
   partenza il giorno 1 e durata 5 significano cinque notti e ritorno il giorno 6.
@@ -209,7 +209,7 @@ l'itinerario (con alternativa se il budget stretto non fosse rispettabile).
 
 ## Generazione asincrona degli itinerari
 
-La conferma in chat non mantiene più aperta la richiesta HTTP durante le ricerche. Il client crea
+La conferma in chat non mantiene aperta la richiesta HTTP durante le ricerche. Il client crea
 un job idempotente con `POST /api/itinerary-jobs`, ne consulta stato e avanzamento tramite
 `GET /api/itinerary-jobs/:id` e conserva job e conversazione attivi in `localStorage`, così il
 polling e la visualizzazione del risultato riprendono dopo un refresh. Gli stati persistiti sono
