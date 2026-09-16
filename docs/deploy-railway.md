@@ -37,7 +37,7 @@ Nel servizio backend imposta le variabili prendendole dal servizio PostgreSQL:
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 NODE_ENV=production
 FRONTEND_ORIGIN=https://<dominio-frontend>.up.railway.app
-JWT_SECRET=<segreto-generato-casualmente>
+JWT_SECRET=<segreto-generato-casualmente-di-almeno-32-caratteri>
 GROQ_API_KEY=<chiave-Groq>
 GROQ_VISION_ENABLED=false
 GROQ_VISION_FREE_TIER_CONFIRMED=false
@@ -47,8 +47,9 @@ GEMINI_API_KEY=<chiave-Gemini>   # opzionale
 ```
 
 Railway fornisce automaticamente `PORT`; il server Express lo legge già da
-`process.env.PORT`. Per gli altri valori usare `backend/.env.example` come
-riferimento, senza copiare segreti o URL locali.
+`process.env.PORT`. `JWT_SECRET` deve contenere almeno 32 caratteri. Per gli
+altri valori usare `backend/.env.example` come riferimento, senza copiare
+segreti o URL locali.
 
 ## Variabili frontend
 
@@ -80,8 +81,14 @@ eseguire solo le migrazioni.
 Il backend salva gli upload nella directory configurata da
 `USER_PREFERENCE_IMAGE_DIR` (default sotto `uploads`). Il filesystem del
 container Railway non va considerato permanente: per mantenere gli upload dopo
-un redeploy bisogna collegare un Volume Railway al path usato dal backend,
-oppure accettare che il deployment demo richieda nuovi upload.
+un redeploy bisogna aggiungere un Volume Railway al servizio backend e impostare:
+
+```text
+USER_PREFERENCE_IMAGE_DIR=/app/uploads/user-preferences
+```
+
+Montare il Volume su `/app/uploads`. Senza Volume gli upload privati si perdono
+al redeploy; per una demo senza upload persistenti si può omettere il Volume.
 
 ## Smoke test
 
