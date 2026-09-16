@@ -241,3 +241,26 @@ h1,h2,h3{min-width:0;text-wrap:balance;word-break:normal;overflow-wrap:normal;hy
 .booking-detail .badge.confirmed,.history-detail .badge.confirmed,.history-detail .history-status{background:var(--color-accent);color:var(--color-accent-ink)}
 .booking-detail a,.history-detail a{color:var(--color-ink)}
 .booking-detail a:hover,.history-detail a:hover{color:var(--color-accent)}
+
+/* Hallmark hover correction · highlight stays separate from readable content. */
+.booking-card:hover:not(:focus-visible),.history-item:hover:not(:focus-visible){
+  background:var(--surface);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-card:hover:not(:focus-visible) strong,.history-item:hover:not(:focus-visible) strong{color:var(--color-ink)}
+.booking-card:hover:not(:focus-visible) .booking-card-meta,.history-item:hover:not(:focus-visible) small{color:var(--color-ink-2)}
+.booking-card:hover:not(:focus-visible) .booking-card-hint{color:var(--color-accent)}
+.booking-card:focus-visible,.history-item:focus-visible{
+  background:var(--surface);
+  border-color:var(--color-focus);
+  color:var(--color-ink);
+  outline:3px solid var(--color-focus);
+  outline-offset:3px;
+  box-shadow:inset 4px 0 0 var(--color-accent);
+}
+.booking-detail a:hover,.history-detail a:hover{color:var(--color-ink);text-decoration-color:var(--color-accent)}
+.booking-detail .booking-share-actions button.secondary:hover,.history-detail .history-delete:hover{
+  background:var(--surface);border-color:var(--color-focus);color:var(--color-ink)
+}
