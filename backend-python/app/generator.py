@@ -40,6 +40,8 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
 
     with connect() as connection:
         progress(10, "Ricerca voli")
+        outbound_date_clause = 'f."date" >= %s AND f."date" < %s'
+        outbound_params = (origin, destination, destination, departure, departure + timedelta(days=1), participants) if departure and arrival else (origin, destination, destination, departure or month_start, month_end, participants)
         outbound = connection.execute(
             'SELECT f."id", f."date", f."cost", oa."iataCode", oa."city", '
             'da."id", da."iataCode", da."city", da."destinationId" '
@@ -48,9 +50,9 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
             'JOIN "Destination" d ON d."id" = da."destinationId" '
             'WHERE f."direction" = \'outbound\' AND oa."iataCode" = %s '
             'AND (LOWER(da."city") = LOWER(%s) OR LOWER(d."country") = LOWER(%s)) '
-            'AND f."date" >= %s AND f."date" < %s AND f."seatsAvailable" >= %s '
+            f'AND {outbound_date_clause} AND f."seatsAvailable" >= %s '
             'ORDER BY f."cost" ASC LIMIT 1',
-            (origin, destination, destination, departure or month_start, (arrival + timedelta(days=1)) if arrival else month_end, participants),
+            outbound_params,
         ).fetchone()
         if not outbound:
             alternatives = connection.execute(
@@ -132,7 +134,7 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
 
         progress(90, "Salvataggio proposta")
         flight_cost = (outbound[2] + inbound[2]) * participants
-        hotel_cost = sum(room[1] for room in rooms)
+        hotel_cost = sum(room[1] for room in rooms) * participants
         activity_cost = sum(item["cost"] for item in activities)
         total = flight_cost + hotel_cost + activity_cost
         result = {
