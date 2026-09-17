@@ -2,7 +2,6 @@ import app from './app.js';
 import { itineraryJobService } from './services/itineraryJobService.js';
 import { prisma } from './db/prisma.js';
 import { closeConversationAdvisoryPool } from './services/conversationAdvisoryLock.js';
-import { ensureIndex } from './services/vectorStore.js';
 import { validateEnvironment } from './config.js';
 
 const config = validateEnvironment();
@@ -13,12 +12,6 @@ const server = app.listen(config.PORT, async () => {
     if (resumed > 0) console.log(`Ripresi ${resumed} job di generazione itinerario`);
   } catch (error) {
     console.error('Impossibile riprendere i job di generazione:', error.message);
-  }
-  try {
-    const index = await ensureIndex();
-    console.log(`Indice RAG pronto: ${index.length} documenti.`);
-  } catch (error) {
-    console.error('Impossibile inizializzare l’indice RAG:', error.message);
   }
 });
 
