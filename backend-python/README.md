@@ -1,8 +1,8 @@
-# Python backend (sperimentale)
+# Python backend
 
-Questo servizio è la base per la progressiva migrazione del backend Express.
-Durante la sperimentazione resta separato da `backend/`, che continua a essere
-il backend operativo del progetto.
+Questo è il backend operativo del progetto. Il vecchio codice Express sotto
+`backend/` resta nel repository solo come riferimento durante la migrazione e
+non viene più avviato dal compose principale.
 
 ## Avvio locale
 
@@ -37,10 +37,10 @@ dei requisiti e aggiorna il job in background.
 Per il percorso completo Python:
 
 ```powershell
-docker compose --profile python up -d --build backend-python frontend-python
+docker compose up -d --build
 ```
 
-Il frontend del profilo Python è disponibile su `http://localhost:8081` e usa
+Il frontend Python è disponibile su `http://localhost:8081` e usa
 direttamente le API Python sulla porta `4001`.
 
 ## Test

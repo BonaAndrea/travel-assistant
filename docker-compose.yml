@@ -15,31 +15,7 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
-    build: ./backend
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - ./backend/.env
-    environment:
-      DATABASE_URL: postgresql://travel:travel@postgres:5432/travel_assistant?schema=public
-      NODE_ENV: development
-      PORT: 4000
-    ports:
-      - '4000:4000'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - preference_uploads:/app/uploads
-    # Dev/demo: applicare le migrazioni versionate prima del primo avvio con
-    # `docker compose run --rm backend npm run prisma:migrate:deploy`.
-    command: ["npm", "start"]
-
-  # Sperimentale: avviare con `docker compose --profile python up -d`.
-  # Il profilo evita di cambiare il backend operativo Node per default.
   backend-python:
-    profiles: ["python"]
     build:
       context: .
       dockerfile: backend-python/Dockerfile
@@ -56,15 +32,7 @@ services:
     volumes:
       - preference_uploads_python:/app/uploads/preferences
 
-  frontend:
-    image: nginx:alpine
-    ports:
-      - '8080:80'
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-
   frontend-python:
-    profiles: ["python"]
     build:
       context: ./frontend
       dockerfile: Dockerfile.python
@@ -75,5 +43,4 @@ services:
 
 volumes:
   pgdata:
-  preference_uploads:
   preference_uploads_python:
