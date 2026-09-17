@@ -14,7 +14,12 @@ def _date(value: Any) -> date | None:
         return None
 
 
-def generate(requirements: dict, progress: Callable[[int, str], None] | None = None) -> dict:
+def generate(
+    requirements: dict,
+    progress: Callable[[int, str], None] | None = None,
+    _flight_offset: int = 0,
+    _include_alternative: bool = True,
+) -> dict:
     progress = progress or (lambda _value, _label: None)
     participants = int(requirements.get("participants", 1))
     departure = _date(requirements.get("outboundDate"))
@@ -51,8 +56,8 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
             'WHERE f."direction" = \'outbound\' AND oa."iataCode" = %s '
             'AND (LOWER(da."city") = LOWER(%s) OR LOWER(d."country") = LOWER(%s)) '
             f'AND {outbound_date_clause} AND f."seatsAvailable" >= %s '
-            'ORDER BY f."cost" ASC LIMIT 1',
-            outbound_params,
+            'ORDER BY f."cost" ASC LIMIT 1 OFFSET %s',
+            (*outbound_params, _flight_offset),
         ).fetchone()
         if not outbound:
             alternatives = connection.execute(
@@ -153,6 +158,30 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
         if budget is not None:
             result["primary"]["withinBudget"] = total <= float(budget)
             result["primary"]["budgetDelta"] = total - float(budget)
+        if _include_alternative:
+            alternative_result = generate(
+                requirements, progress, _flight_offset=_flight_offset + 1,
+                _include_alternative=False,
+            )
+            alternative = alternative_result.get("primary") if isinstance(alternative_result, dict) else None
+            if not alternative and requirements.get("outboundDate") and requirements.get("returnDate"):
+                relaxed_requirements = dict(requirements)
+                relaxed_requirements.pop("outboundDate", None)
+                relaxed_requirements.pop("returnDate", None)
+                alternative_result = generate(
+                    relaxed_requirements, progress, _flight_offset=1,
+                    _include_alternative=False,
+                )
+                alternative = alternative_result.get("primary") if isinstance(alternative_result, dict) else None
+            if alternative and (
+                alternative.get("flights", {}).get("outbound", {}).get("id")
+                != result["primary"].get("flights", {}).get("outbound", {}).get("id")
+            ):
+                alternative["requirementsSnapshot"] = requirements
+                alternative["compromises"] = ["Utilizzata una seconda combinazione di voli disponibile nel catalogo."]
+                if alternative.get("flights", {}).get("outbound", {}).get("date", "")[:10] != str(requirements.get("outboundDate", "")):
+                    alternative["compromises"] = ["Spostata la partenza a una data alternativa nello stesso mese."]
+                result["alternative"] = alternative
         return result
 
 
