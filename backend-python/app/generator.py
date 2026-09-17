@@ -147,8 +147,8 @@ def generate(
             "primary": {
                 "status": "ok", "totalCost": total,
                 "breakdown": {"flightCost": flight_cost, "hotelCost": hotel_cost, "activityCost": activity_cost},
-                "flights": {"outbound": {"id": outbound[0], "direction": "outbound", "date": outbound[1].isoformat(), "cost": outbound[2] * participants, "origin": outbound[3], "destination": outbound[6]},
-                            "inbound": {"id": inbound[0], "direction": "return", "date": inbound[1].isoformat(), "cost": inbound[2] * participants, "origin": inbound[3], "destination": inbound[5]}},
+                "flights": {"outbound": {"id": outbound[0], "direction": "outbound", "date": outbound[1].isoformat(), "cost": outbound[2] * participants, "origin": outbound[3], "destination": outbound[6], "originAirport": {"iataCode": outbound[3], "city": outbound[4]}, "destinationAirport": {"iataCode": outbound[6], "city": outbound[7], "destinationId": outbound[8]}},
+                            "inbound": {"id": inbound[0], "direction": "return", "date": inbound[1].isoformat(), "cost": inbound[2] * participants, "origin": inbound[3], "destination": inbound[5], "originAirport": {"iataCode": inbound[3], "city": inbound[4]}, "destinationAirport": {"iataCode": inbound[5], "city": inbound[6]}}},
                 "hotel": {"id": hotel[0], "name": hotel[1], "city": hotel[2], "nights": [room[0].isoformat() for room in rooms],
                           "prices": {room[0].isoformat(): room[1] for room in rooms}, "pricePerNight": rooms[0][1]},
                 "activities": activities, "compromises": [],
