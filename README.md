@@ -116,7 +116,9 @@ con il deploy. Per usarlo sul database Neon, aggiungere il secret repository
 `NEON_DATABASE_URL` con la stringa di connessione del database demo. In **Actions**, selezionare
 il workflow, premere **Run workflow** e scrivere esattamente `RIGENERA-CATALOGO` nel campo di
 conferma. Il workflow applica prima le migrazioni e poi esegue il seed; valgono quindi tutte le
-avvertenze distruttive riportate sopra.
+avvertenze distruttive riportate sopra. Al termine, avvia un deploy manuale del backend Render
+sul ramo `feature/railway-demo`: il backend ricostruisce automaticamente l'indice RAG nel proprio
+filesystem effimero all'avvio e il log riporta il numero di documenti indicizzati.
 
 ### Demo rapida
 

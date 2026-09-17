@@ -27,6 +27,7 @@ function normalizeLocation(value) {
 const INDEX_PATH = path.resolve('src/db/vector-index.json');
 
 let embedder = null;
+let indexRebuildPromise = null;
 async function getEmbedder() {
   if (!embedder) {
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
@@ -92,6 +93,21 @@ function loadIndex() {
 }
 
 /**
+ * I filesystem dei deploy gratuiti sono effimeri: quando l'indice non esiste,
+ * lo ricostruiamo dal catalogo relazionale anziché restituire retrieval vuoto.
+ * La promessa condivisa evita che più richieste avviino rebuild concorrenti.
+ */
+export async function ensureIndex() {
+  const existing = loadIndex();
+  if (existing.length > 0) return existing;
+  if (!indexRebuildPromise) {
+    indexRebuildPromise = buildIndex().finally(() => { indexRebuildPromise = null; });
+  }
+  await indexRebuildPromise;
+  return loadIndex();
+}
+
+/**
  * Filtra il catalogo prima del ranking semantico e del limite topK.
  * Il fallback sulla cittÃ  mantiene compatibili gli indici creati prima dei metadata
  * destinationId, senza consentire risultati di altre cittÃ .
@@ -121,7 +137,7 @@ export function filterRetrievalCandidates(documents, {
 export async function semanticSearch(query, {
   type, country, destinationId, destinationCity, topK = 5,
 } = {}) {
-  const index = loadIndex();
+  const index = await ensureIndex();
   if (index.length === 0) return [];
 
   const qVector = await embed(query);
