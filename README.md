@@ -118,7 +118,9 @@ il workflow, premere **Run workflow** e scrivere esattamente `RIGENERA-CATALOGO`
 conferma. Il workflow applica prima le migrazioni e poi esegue il seed; valgono quindi tutte le
 avvertenze distruttive riportate sopra. Al termine, avvia un deploy manuale del backend Render
 sul ramo `feature/railway-demo`: il backend ricostruisce l'indice RAG al primo itinerario richiesto,
-senza bloccare l'avvio o il login sul filesystem effimero del servizio.
+senza bloccare l'avvio o il login sul filesystem effimero del servizio. Se l'indice file non è
+disponibile, la selezione attività usa direttamente il catalogo relazionale e non carica il modello
+di embedding nell'istanza gratuita.
 
 ### Demo rapida
 
