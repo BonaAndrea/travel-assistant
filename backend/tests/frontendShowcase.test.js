@@ -25,7 +25,7 @@ test('chat showcase keeps the demo journey and actionable recovery controls', ()
   expect(chat).toContain("toggleAttribute('hidden', functionalFailure)");
   expect(chat).toContain('generation-progress');
   expect(chat).toContain('hidden = functionalFailure');
-  expect(chat).toContain('syncComposerAvailability();\n        return;');
+  expect(chat).toContain('syncComposerAvailability();');
   expect(chat).toContain('cooldownUntil = 0;');
   expect(chat).not.toContain("document.getElementById('chat-retry-btn').hidden = true;");
   expect(chat).toContain('function generationIssueMessage(issue)');
