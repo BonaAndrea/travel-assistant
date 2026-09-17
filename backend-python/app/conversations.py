@@ -106,6 +106,23 @@ def conversation_exists(connection: object, conversation_id: str, user_id: str) 
     return row is not None
 
 
+def _apply_catalog_locations(connection: object, text: str, requirements: dict) -> dict:
+    """Resolve locations from the relational catalog, not only the demo map."""
+    lowered = text.casefold()
+    destinations = connection.execute('SELECT "city", "country" FROM "Destination"').fetchall()
+    for city, country in sorted(destinations, key=lambda item: len(str(item[0])), reverse=True):
+        if str(city).casefold() in lowered:
+            requirements.update({"country": country, "destinationCity": city})
+            break
+    airports = connection.execute('SELECT "iataCode", "city" FROM "Airport"').fetchall()
+    departure_context = re.search(r"\b(?:da|partenza|parto|aeroporto)\b", lowered)
+    for code, city in sorted(airports, key=lambda item: len(str(item[1])), reverse=True):
+        if "departureAirport" not in requirements and departure_context and (str(code).casefold() in lowered or str(city).casefold() in lowered):
+            requirements["departureAirport"] = code
+            break
+    return requirements
+
+
 @router.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(_user_id: UserId) -> dict[str, str]:
     # La creazione è transitoria, come nell'implementazione Node: la riga viene
@@ -149,6 +166,12 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             'VALUES (%s, %s, %s, %s, NOW())',
             (str(uuid4()), conversation_id, "user", message),
         )
+        history_rows = connection.execute(
+            'SELECT "role", "content" FROM "Message" WHERE "conversationId" = %s '
+            'ORDER BY "createdAt" DESC LIMIT 12',
+            (conversation_id,),
+        ).fetchall()
+        history = [{"role": row[0], "content": row[1]} for row in reversed(history_rows)]
         if state.get("phase") == "confirming" and _confirmation(message) and is_complete(requirements):
             reply = "Perfetto: i requisiti sono confermati. Avvio la generazione dell’itinerario."
             state["phase"] = "confirmed"
@@ -159,8 +182,9 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             }
         else:
             requirements = _extract_requirements(message, requirements)
+            requirements = _apply_catalog_locations(connection, message, requirements)
             llm_fields, llm_reply = await enrich_requirements(
-                [{"role": "user", "content": message}], requirements,
+                history, requirements,
             )
             # Deterministic values win over model suggestions when the user
             # explicitly supplied them in this turn.

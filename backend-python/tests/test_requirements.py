@@ -9,7 +9,7 @@ from app.domain.requirements import (
     is_complete,
     normalize_month,
 )
-from app.conversations import _extract_requirements
+from app.conversations import _apply_catalog_locations, _extract_requirements
 from app.database import psycopg_url
 from app.vision import analyze_image
 
@@ -34,6 +34,27 @@ def test_chat_requirement_update_preserves_existing_fields() -> None:
     assert requirements["destinationCity"] == "Barcellona"
     assert requirements["durationDays"] == 6
     assert requirements["activityPreferences"] == ["cultura", "relax"]
+
+
+def test_catalog_location_resolution_supports_destinations_beyond_static_map() -> None:
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __init__(self):
+            self.results = [Result([("Valencia", "Spagna")]), Result([("VLC", "Valencia"), ("FCO", "Roma")])]
+
+        def execute(self, _query):
+            return self.results.pop(0)
+
+    text = "Parto da Roma per Valencia"
+    resolved = _apply_catalog_locations(Connection(), text, _extract_requirements(text, {}))
+    assert resolved["destinationCity"] == "Valencia"
+    assert resolved["departureAirport"] == "FCO"
 
 
 def test_complete_requirements_and_budget_validation() -> None:
