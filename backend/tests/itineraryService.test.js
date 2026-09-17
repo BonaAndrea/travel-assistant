@@ -113,6 +113,22 @@ describe('monthToDateRange', () => {
       expect(result.timedOut).toBe(false);
     });
 
+    test('puÃ² limitare l’itinerario a una attivitÃ  principale per giornata', () => {
+      const result = optimizeActivitySelection({
+        days: 2,
+        participants: 1,
+        budgetRemaining: 100,
+        maxActivitiesPerDay: 1,
+        candidatesByDate: [
+          { date: '2026-10-01', candidates: [candidate('morning', 1, 'cultura', 5), candidate('afternoon', 0.9, 'sport', 5)] },
+          { date: '2026-10-02', candidates: [candidate('evening', 1, 'relax', 5), candidate('night', 0.9, 'nightlife', 5)] },
+        ],
+      });
+
+      expect(result.chosen).toHaveLength(2);
+      expect(result.daysWithoutActivity).toBe(0);
+    });
+
     test('espone il superamento del limite temporale del solver', () => {
       const result = optimizeActivitySelection({
         days: 2,

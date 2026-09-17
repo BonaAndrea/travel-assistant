@@ -305,11 +305,12 @@ da confermare.
   rispettando budget, capacità, disponibilità, preferenze, varietà e assenza di sovrapposizioni.
   La ricerca resta euristica e usa il limite temporale documentato nella voce successiva.
 - **Fasce orarie e solver**: `ActivityAvailability.startMinute` è inclusivo e `endMinute` è
-  esclusivo, relativi alla mezzanotte UTC. Il solver può scegliere più attività nello stesso
-  giorno solo quando le fasce non si sovrappongono e il costo resta nel budget; i record legacy
-  senza orari valgono come giornata intera. La beam search usa un limite di **250 ms per
-  selezione** (`ACTIVITY_SOLVER_TIME_LIMIT_MS`, sovrascrivibile nei test con `timeLimitMs`),
-  registra il compromesso se il limite scatta e il booking usa `availabilityId` per lo slot esatto.
+  esclusivo, relativi alla mezzanotte UTC. Il solver supporta più attività non sovrapposte nello
+  stesso giorno, ma l'itinerario demo ne propone una principale per giornata: così la ricerca
+  resta rapida anche su istanze con CPU ridotta. I record legacy senza orari valgono come
+  giornata intera. La beam search usa un limite di **250 ms per selezione**
+  (`ACTIVITY_SOLVER_TIME_LIMIT_MS`, sovrascrivibile nei test con `timeLimitMs`) e il booking usa
+  `availabilityId` per lo slot esatto.
 - **Modello dati aeroporti/destinazioni**: il dominio è normalizzato con le entità `Airport` e
   `Destination`; i voli referenziano gli aeroporti tramite chiavi esterne e la destinazione
   viene risolta dal paese/città dell'aeroporto di arrivo. I requisiti conversazionali continuano

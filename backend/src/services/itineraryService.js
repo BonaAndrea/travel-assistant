@@ -333,6 +333,7 @@ export function optimizeActivitySelection({
   participants,
   budgetRemaining,
   candidatesByDate,
+  maxActivitiesPerDay = Infinity,
   timeLimitMs = ACTIVITY_SOLVER_TIME_LIMIT_MS,
 }) {
   const beamWidth = 250;
@@ -389,6 +390,7 @@ export function optimizeActivitySelection({
 
         const plansBeforeCandidate = [...dailyPlans];
         for (const plan of plansBeforeCandidate) {
+          if (plan.chosen.length >= maxActivitiesPerDay) continue;
           if (plan.usedIds.has(activityId)
             || state.spent + plan.spent + cost > budgetRemaining
             || plan.occupied.some((occupied) => overlaps(occupied, window))) continue;
@@ -547,7 +549,16 @@ async function selectActivities(
     };
   });
 
-  return optimizeActivitySelection({ days, participants, budgetRemaining, candidatesByDate });
+  // Nell'itinerario demo proponiamo una sola attività principale al giorno.
+  // Evita che il solver esplori combinazioni superflue (e che sulle istanze
+  // con CPU ridotta esaurisca il tempo pur avendo attività disponibili).
+  return optimizeActivitySelection({
+    days,
+    participants,
+    budgetRemaining,
+    candidatesByDate,
+    maxActivitiesPerDay: 1,
+  });
 }
 
 /**
