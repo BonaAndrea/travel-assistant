@@ -103,7 +103,9 @@ export function filterRetrievalCandidates(documents, {
   const cityKey = normalizeLocation(destinationCity);
   return documents.filter((document) => {
     if (type && document.type !== type) return false;
-    if (country && normalizeLocation(document.metadata?.country) !== countryKey) return false;
+    // Quando destinationId è presente, è il riferimento relazionale autorevole:
+    // il paese può arrivare tradotto dal provider (es. "Spain" vs "Spagna").
+    if (country && !destinationId && normalizeLocation(document.metadata?.country) !== countryKey) return false;
     if (!destinationId && !destinationCity) return true;
     if (destinationId && document.metadata?.destinationId) {
       return document.metadata.destinationId === destinationId;

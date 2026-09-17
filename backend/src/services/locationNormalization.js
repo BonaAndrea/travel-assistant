@@ -20,6 +20,12 @@ const COUNTRY_ALIASES = new Map([
   ['italy', 'IT'], ['italia', 'IT'], ['spain', 'ES'], ['spagna', 'ES'],
   ['portugal', 'PT'], ['portogallo', 'PT'], ['france', 'FR'], ['francia', 'FR'],
   ['greece', 'GR'], ['grecia', 'GR'], ['czechrepublic', 'CZ'], ['repubblicaceca', 'CZ'],
+  ['netherlands', 'NL'], ['paesibassi', 'NL'], ['holland', 'NL'], ['olanda', 'NL'],
+  ['germany', 'DE'], ['germania', 'DE'], ['austria', 'AT'], ['hungary', 'HU'], ['ungheria', 'HU'],
+  ['ireland', 'IE'], ['irlanda', 'IE'], ['denmark', 'DK'], ['danimarca', 'DK'],
+  ['sweden', 'SE'], ['svezia', 'SE'], ['turkey', 'TR'], ['turkiye', 'TR'], ['turchia', 'TR'],
+  ['croatia', 'HR'], ['croazia', 'HR'], ['poland', 'PL'], ['polonia', 'PL'],
+  ['belgium', 'BE'], ['belgio', 'BE'],
 ]);
 
 function countryCodeForInput(value) {

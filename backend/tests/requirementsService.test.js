@@ -41,6 +41,15 @@ test('mantiene il ritorno inclusivo nel prompt QA-02 completo', () => {
   expect(dates.returnDate.toISOString()).toBe('2026-10-06T00:00:00.000Z');
 });
 
+test('applica l’anno esplicitato sul ritorno anche alla partenza con mesi diversi', () => {
+  const dates = extractExplicitTravelDates(
+    'Vorrei andare a Amsterdam dal 25 febbraio al 2 marzo 2027.',
+    new Date('2026-09-17T00:00:00Z'),
+  );
+  expect(dates.departure.toISOString()).toBe('2027-02-25T00:00:00.000Z');
+  expect(dates.returnDate.toISOString()).toBe('2027-03-02T00:00:00.000Z');
+});
+
 test.each([
   ['22 novembre - 6 dicembre 2026', 14],
   ['22/11/2026 - 13/12/2026', 21],

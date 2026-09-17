@@ -15,8 +15,9 @@ const MONTHS_IT = [
   'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
   'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
 ];
-const DEPARTURE_DAYS = [1, 8, 15, 22];
-const COVERAGE_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
+// Otto partenze al mese, distribuite ogni 3–4 giorni. Il catalogo resta
+// deterministico ma è abbastanza fitto per prove manuali non artificiali.
+const DEPARTURE_DAYS = [1, 4, 8, 11, 15, 18, 22, 25];
 
 export function buildSeedPlan(referenceDate = new Date(), monthCount = 12) {
   const firstMonth = new Date(Date.UTC(
@@ -26,12 +27,19 @@ export function buildSeedPlan(referenceDate = new Date(), monthCount = 12) {
     const start = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + offset, 1));
     const year = start.getUTCFullYear();
     const month = start.getUTCMonth();
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    // L'ultima finestra include qualche giorno del mese successivo: così una
+    // partenza al 25 con 5 notti rimane prenotabile anche se cade a febbraio.
+    // Per le finestre precedenti quei giorni sono già coperti dal mese seguente.
+    const coverageLength = daysInMonth + (offset === monthCount - 1 ? 4 : 0);
     return {
       year,
       month,
       monthName: MONTHS_IT[month],
       departureDates: DEPARTURE_DAYS.map((day) => new Date(Date.UTC(year, month, day, 8))),
-      coverageDates: COVERAGE_DAYS.map((day) => new Date(Date.UTC(year, month, day))),
+      coverageDates: Array.from({ length: coverageLength }, (_, index) => (
+        new Date(Date.UTC(year, month, index + 1))
+      )),
     };
   });
 
@@ -40,14 +48,31 @@ export function buildSeedPlan(referenceDate = new Date(), monthCount = 12) {
     { iata: 'MXP', name: 'Aeroporto di Milano Malpensa', city: 'Milano', countryCode: 'IT', costBias: 8 },
     { iata: 'BLQ', name: 'Aeroporto di Bologna', city: 'Bologna', countryCode: 'IT', costBias: 5 },
     { iata: 'NAP', name: 'Aeroporto di Napoli', city: 'Napoli', countryCode: 'IT', costBias: 6 },
+    { iata: 'VCE', name: 'Aeroporto di Venezia Marco Polo', city: 'Venezia', countryCode: 'IT', costBias: 7 },
+    { iata: 'TRN', name: 'Aeroporto di Torino Caselle', city: 'Torino', countryCode: 'IT', costBias: 6 },
+    { iata: 'BRI', name: 'Aeroporto di Bari Karol Wojtyła', city: 'Bari', countryCode: 'IT', costBias: 9 },
   ];
   const destinations = [
     { country: 'Spagna', countryCode: 'ES', city: 'Barcellona', iata: 'BCN', flightBase: 90 },
     { country: 'Spagna', countryCode: 'ES', city: 'Madrid', iata: 'MAD', flightBase: 82 },
+    { country: 'Spagna', countryCode: 'ES', city: 'Valencia', iata: 'VLC', flightBase: 86 },
     { country: 'Portogallo', countryCode: 'PT', city: 'Lisbona', iata: 'LIS', flightBase: 78 },
+    { country: 'Portogallo', countryCode: 'PT', city: 'Porto', iata: 'OPO', flightBase: 80 },
     { country: 'Francia', countryCode: 'FR', city: 'Parigi', iata: 'CDG', flightBase: 95 },
+    { country: 'Francia', countryCode: 'FR', city: 'Nizza', iata: 'NCE', flightBase: 92 },
     { country: 'Grecia', countryCode: 'GR', city: 'Atene', iata: 'ATH', flightBase: 110 },
     { country: 'Repubblica Ceca', countryCode: 'CZ', city: 'Praga', iata: 'PRG', flightBase: 88 },
+    { country: 'Paesi Bassi', countryCode: 'NL', city: 'Amsterdam', iata: 'AMS', flightBase: 105 },
+    { country: 'Germania', countryCode: 'DE', city: 'Berlino', iata: 'BER', flightBase: 92 },
+    { country: 'Austria', countryCode: 'AT', city: 'Vienna', iata: 'VIE', flightBase: 90 },
+    { country: 'Ungheria', countryCode: 'HU', city: 'Budapest', iata: 'BUD', flightBase: 84 },
+    { country: 'Irlanda', countryCode: 'IE', city: 'Dublino', iata: 'DUB', flightBase: 112 },
+    { country: 'Danimarca', countryCode: 'DK', city: 'Copenaghen', iata: 'CPH', flightBase: 118 },
+    { country: 'Svezia', countryCode: 'SE', city: 'Stoccolma', iata: 'STO', flightBase: 122 },
+    { country: 'Turchia', countryCode: 'TR', city: 'Istanbul', iata: 'IST', flightBase: 108 },
+    { country: 'Croazia', countryCode: 'HR', city: 'Dubrovnik', iata: 'DBV', flightBase: 104 },
+    { country: 'Polonia', countryCode: 'PL', city: 'Cracovia', iata: 'KRK', flightBase: 86 },
+    { country: 'Belgio', countryCode: 'BE', city: 'Bruxelles', iata: 'BRU', flightBase: 98 },
   ];
   return { months, origins, destinations };
 }

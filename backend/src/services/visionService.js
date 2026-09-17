@@ -39,7 +39,10 @@ const geminiVisionAvailable = GEMINI_ENABLED && GEMINI_VISION_ENABLED;
 const groqVisionAvailable = VISION_ENABLED && FREE_TIER_CONFIRMED && hasApiKey && Boolean(visionGroq);
 
 function canFallbackToGemini(error) {
-  return error?.code === 'GROQ_CIRCUIT_OPEN' || error?.status === 408 || error?.status === 429
+  const message = error?.error?.message || error?.message || '';
+  const modelUnavailable = error?.status === 404
+    && /model.*(does not exist|not found|not available|decommissioned)|model.*access/i.test(message);
+  return modelUnavailable || error?.code === 'GROQ_CIRCUIT_OPEN' || error?.status === 408 || error?.status === 429
     || (error?.status >= 500 && error?.status <= 599)
     || ['APIConnectionError', 'APIConnectionTimeoutError', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN']
       .includes(error?.name || error?.code);

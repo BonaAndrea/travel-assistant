@@ -82,6 +82,67 @@ test('correction invalidates a proposal and a subsequent save cannot mix old pri
   expect(db.itinerary.create).not.toHaveBeenCalled();
 });
 
+test('blocks an unsupported destination before asking for the remaining requirements', async () => {
+  conversation.state = { phase: 'collecting', requirements: {} };
+  chatTurn.mockResolvedValue({
+    assistantMessage: 'Dimmi da quale aeroporto parti.',
+    updatedFields: {
+      country: 'Luna',
+      outboundDate: '2026-10-01T00:00:00.000Z',
+      returnDate: '2026-10-06T00:00:00.000Z',
+      durationDays: 6,
+      participants: 2,
+      budget: 2000,
+    },
+  });
+
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Vorrei andare sulla Luna dal 1 al 6 ottobre 2026, in 2 persone, con 2000 euro di budget.' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.generationIssue).toEqual(expect.objectContaining({ errorCode: 'unknown_destination', requested: 'Luna' }));
+  expect(response.body.reply).toContain('non è disponibile nel catalogo');
+  expect(response.body.reply).toContain('quale requisito vuoi modificare');
+  expect(response.body.reply).not.toContain('aeroporto');
+  expect(conversation.state.generationIssue.errorCode).toBe('unknown_destination');
+});
+
+test('persists a catalog city mentioned by the user even when the LLM returns only the country', async () => {
+  conversation.state = { phase: 'collecting', requirements: {} };
+  chatTurn.mockResolvedValue({
+    assistantMessage: 'Ho aggiornato la destinazione.',
+    updatedFields: { country: 'Spagna' },
+  });
+
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Penso a Barcellona per il viaggio.' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.requirements.destinationCity).toBe('Barcellona');
+  expect(conversation.state.requirements.destinationCity).toBe('Barcellona');
+});
+
+test('normalizes an airport mentioned in Italian before itinerary generation', async () => {
+  conversation.state = { phase: 'collecting', requirements: {} };
+  db.destination.findMany.mockResolvedValue([{
+    country: 'Spagna', countryCode: 'ES', city: 'Barcellona', airports: [],
+  }]);
+  db.airport = { findMany: jest.fn().mockResolvedValue([
+    { iataCode: 'FCO', city: 'Roma', name: 'Roma Fiumicino', destination: null },
+  ]) };
+  chatTurn.mockResolvedValue({
+    assistantMessage: 'Requisiti aggiornati.',
+    updatedFields: { country: 'Spain', destinationCity: 'Barcelona', departureAirport: 'Rome Fiumicino' },
+  });
+
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Partiamo da Roma Fiumicino e andiamo a Barcellona.' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.requirements.departureAirport).toBe('FCO');
+  expect(conversation.state.requirements.departureAirport).toBe('FCO');
+});
+
 test('a negative or qualified confirmation is processed by the LLM even in confirming phase', async () => {
   conversation.state.phase = 'confirming';
   const response = await request(app).post('/chat/conversations/conversation-1/messages').send({ message: 'non confermo' });
@@ -106,13 +167,14 @@ test('confirmation resolves Spain aliases before enabling generation', async () 
 test('la conferma usa sempre un riepilogo deterministico anche con testo LLM', async () => {
   conversation.state.phase = 'collecting';
   conversation.state.requirements = {
-    country: 'Spagna', departureAirport: 'FCO', travelMonth: 'giugno', durationDays: 6,
+    country: 'Spagna', destinationCity: 'Barcellona', departureAirport: 'FCO', travelMonth: 'giugno', durationDays: 6,
     participants: 2, budget: 5000, activityPreferences: ['cultura'],
   };
   chatTurn.mockResolvedValue({ assistantMessage: 'Perfetto, tutto pronto!', updatedFields: {} });
   const response = await request(app).post('/chat/conversations/conversation-1/messages').send({ message: 'ok' });
   expect(response.body.phase).toBe('confirming');
   expect(response.body.reply).toContain('Riepilogo della richiesta');
+  expect(response.body.reply).toContain('Destinazione: Barcellona');
   expect(response.body.reply).toContain('Durata: 6 giorni');
   expect(response.body.reply).toContain('Rispondi "sì"');
   expect(response.body.reply).not.toContain('Perfetto, tutto pronto!');

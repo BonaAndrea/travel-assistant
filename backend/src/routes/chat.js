@@ -12,7 +12,7 @@ import {
 } from '../services/requirementsService.js';
 import { sameRequirements } from '../services/requirementsSnapshot.js';
 import { findConfirmedDateConflict } from '../services/bookingService.js';
-import { resolveDestinationReference } from '../services/locationNormalization.js';
+import { normalizeLocation, resolveAirportReference, resolveDestinationReference } from '../services/locationNormalization.js';
 import { readPreferenceImage, removePreferenceImage, serializePreferenceImage } from '../services/preferenceImageService.js';
 import { chatMessageSchema, validationError } from '../validation.js';
 import { createConversationLockMiddleware } from '../middleware/conversationLock.js';
@@ -75,7 +75,7 @@ function isConversationId(value) {
 
 function deterministicConfirmationSummary(requirements) {
   const lines = [
-    `Destinazione: ${requirements.country || 'da definire'}`,
+    `Destinazione: ${requirements.destinationCity || requirements.country || 'da definire'}`,
     `Partenza da: ${requirements.departureAirport || 'da definire'}`,
     `Periodo: ${requirements.travelMonth || 'da definire'}`,
     `Durata: ${requirements.durationDays || 'da definire'} giorni`,
@@ -92,7 +92,64 @@ function generationIssueReply(issue) {
       alternative?.availableReturnDate?.slice?.(0, 10) || alternative?.date?.slice?.(0, 10) || alternative?.city,
     ).filter(Boolean).join(', ')}.`
     : '';
-  return `${issue?.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (date, durata, aeroporto, budget o preferenze), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
+  const fields = issue?.errorCode === 'unknown_destination'
+    ? 'destinazione, date, durata, budget o preferenze'
+    : 'date, durata, aeroporto, budget o preferenze';
+  return `${issue?.message || 'La combinazione richiesta non è disponibile nel catalogo.'} Indica quale requisito vuoi modificare (${fields}), così aggiorno la richiesta senza perderne gli altri dati.${alternatives}`;
+}
+
+async function resolveCatalogDestinationIssue(requirements) {
+  if (!prisma.destination?.findMany) return null;
+  const requested = requirements?.destinationCity || requirements?.country;
+  if (!requested) return null;
+  if (await resolveDestinationReference(prisma, requested)) return null;
+
+  const supportedDestinations = await prisma.destination.findMany({
+    select: { city: true, country: true },
+    orderBy: { city: 'asc' },
+    take: 8,
+  });
+  const alternatives = supportedDestinations.map(({ city, country }) => city || country).filter(Boolean);
+  return {
+    errorCode: 'unknown_destination',
+    requested,
+    alternatives,
+    message: `La destinazione "${requested}" non è disponibile nel catalogo.`,
+  };
+}
+
+async function inferDestinationCityFromMessage(message, requirements) {
+  if (requirements?.destinationCity || !prisma.destination?.findMany) return null;
+  const normalizedMessage = normalizeLocation(message);
+  if (!normalizedMessage) return null;
+  const destinations = await prisma.destination.findMany({
+    select: { city: true },
+    orderBy: { city: 'asc' },
+  });
+  return destinations.find((destination) => {
+    const city = normalizeLocation(destination.city);
+    return city.length >= 4 && normalizedMessage.includes(city);
+  })?.city || null;
+}
+
+async function normalizeDepartureAirportFromMessage(message, requirements) {
+  if (!prisma.airport?.findMany) return null;
+  const normalizedMessage = normalizeLocation(message);
+  const requested = requirements?.departureAirport;
+  const requestedAirport = requested ? await resolveAirportReference(prisma, requested) : null;
+  if (requestedAirport) return requestedAirport.iataCode;
+  if (!normalizedMessage) return null;
+
+  const airports = await prisma.airport.findMany({ include: { destination: true } });
+  const matches = airports.flatMap((airport) => [
+    { airport, value: airport.iataCode },
+    { airport, value: airport.city },
+    { airport, value: airport.name },
+  ]).filter(({ value }) => {
+    const normalizedValue = normalizeLocation(value);
+    return normalizedValue.length >= 4 && normalizedMessage.includes(normalizedValue);
+  }).sort((left, right) => normalizeLocation(right.value).length - normalizeLocation(left.value).length);
+  return matches[0]?.airport.iataCode || null;
 }
 
 function parsePositiveInteger(value, fallback) {
@@ -425,10 +482,25 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     }
   }
   const requirements = { ...state.requirements, ...normalizedFields };
+  const inferredDestinationCity = await inferDestinationCityFromMessage(message, requirements);
+  if (inferredDestinationCity) requirements.destinationCity = inferredDestinationCity;
+  const normalizedDepartureAirport = await normalizeDepartureAirportFromMessage(message, requirements);
+  if (normalizedDepartureAirport) requirements.departureAirport = normalizedDepartureAirport;
   if (!sameRequirements(state.requirements, requirements)) delete state.lastResult;
   if (Object.keys(normalizedFields).length > 0) delete state.generationIssue;
   state.requirements = requirements;
   state.phase = 'collecting';
+
+  const destinationIssue = await resolveCatalogDestinationIssue(state.requirements);
+  if (destinationIssue) {
+    state.generationIssue = destinationIssue;
+    const reply = generationIssueReply(destinationIssue);
+    await prisma.conversation.update({ where: { id }, data: { state } });
+    await prisma.message.create({ data: { conversationId: id, role: 'assistant', content: reply } });
+    return res.json({ reply, phase: state.phase, requirements: state.requirements,
+      missing: getMissingFields(state.requirements), issues: validateConsistency(state.requirements),
+      generationIssue: destinationIssue });
+  }
 
   const missing = getMissingFields(state.requirements);
   const issues = validateConsistency(state.requirements);

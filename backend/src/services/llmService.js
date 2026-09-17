@@ -148,12 +148,14 @@ const createChatCompletion = createCompletionClient(
   createGroqCompletion, MODEL_CANDIDATES, createLlmResilience(LLM_RESILIENCE_CONFIG),
 );
 const createVisualChatCompletion = createCompletionClient(
-  createGroqCompletion, [CHAT_VISION_MODEL, ...MODEL_CANDIDATES.filter((model) => model !== CHAT_VISION_MODEL)],
+  // I modelli testuali Groq non sono fallback validi per un turno con immagini:
+  // dopo il modello vision configurato deve intervenire il provider Gemini.
+  createGroqCompletion, [CHAT_VISION_MODEL],
   createLlmResilience({ ...LLM_RESILIENCE_CONFIG, maxRetries: CHAT_VISION_MAX_RETRIES }),
 );
 
 function canFallbackToGemini(error) {
-  return !error || error.code === 'GROQ_CIRCUIT_OPEN' || error.code === 'GROQ_API_KEY_MISSING'
+  return !error || isModelAccessError(error) || error.code === 'GROQ_CIRCUIT_OPEN' || error.code === 'GROQ_API_KEY_MISSING'
     || error.status === 408 || error.status === 429 || (error.status >= 500 && error.status <= 599)
     || ['APIConnectionError', 'APIConnectionTimeoutError', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN']
       .includes(error?.name || error?.code);

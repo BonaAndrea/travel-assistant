@@ -47,7 +47,11 @@ export function extractExplicitTravelDates(value, referenceDate = new Date()) {
   // parser abbreviato può iniziare dal numero dell'anno (es. "2026").
   const namedFirst = text.match(new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?\\s*(?:-|a|al|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
   if (namedFirst) {
-    const departure = parseDayMonth(namedFirst[1], namedFirst[2], namedFirst[3] || referenceDate.getUTCFullYear());
+    // In "dal 25 febbraio al 2 marzo 2027" l'anno finale vale per
+    // entrambe le date. Senza questo fallback la partenza restava nell'anno
+    // di riferimento e il viaggio diventava artificialmente lunghissimo.
+    const sharedYear = namedFirst[3] || namedFirst[6] || referenceDate.getUTCFullYear();
+    const departure = parseDayMonth(namedFirst[1], namedFirst[2], sharedYear);
     const returnYear = namedFirst[6] || namedFirst[3] || referenceDate.getUTCFullYear();
     const returnDate = parseDayMonth(namedFirst[4], namedFirst[5], returnYear);
     if (departure && returnDate) return { departure, returnDate };
@@ -60,7 +64,8 @@ export function extractExplicitTravelDates(value, referenceDate = new Date()) {
   }
   const named = text.match(new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?\\s*(?:-|–|—|a|al|fino\\s+a)\\s*(\\d{1,2})\\s+(${monthPattern})(?:\\s+(20\\d{2}))?`, 'i'));
   if (named) {
-    const departure = parseDayMonth(named[1], named[2], named[3] || referenceDate.getUTCFullYear());
+    const sharedYear = named[3] || named[6] || referenceDate.getUTCFullYear();
+    const departure = parseDayMonth(named[1], named[2], sharedYear);
     const returnYear = named[6] || named[3] || referenceDate.getUTCFullYear();
     const returnDate = parseDayMonth(named[4], named[5], returnYear);
     if (departure && returnDate) return { departure, returnDate };

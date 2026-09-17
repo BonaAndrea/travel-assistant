@@ -132,8 +132,14 @@ test('first image selection initializes one conversation and supports image-only
   expect(chat).toContain('data.generationReady && !requirementCorrectionPending');
   expect(chat).toContain('function requirementsConfirmationMessage(requirements, fallback)');
   expect(chat).toContain('**Riepilogo aggiornato**');
+  expect(chat).toContain('const destination = requirements.destinationCity || requirements.destinationAirport || requirements.country || \'da definire\';');
+  expect(chat).toContain('- Partecipanti: ${requirements.participants || \'da definire\'}');
+  expect(chat).toContain('- Budget totale: ${requirements.budget || \'da definire\'}€');
+  expect(chat).toContain('- Preferenze: ${preferences}');
   expect(chat).toContain('Confermi questi nuovi requisiti?');
   expect(chat).toContain('requirementsConfirmationMessage(data.requirements, data.reply)');
+  expect(chat).toContain('data.phase === \'confirming\' && !data.generationReady && data.requirements');
+  expect(chat).toContain("shareControls.hidden = localStorage.getItem(VOICE_ENABLED_KEY) !== 'true';");
 });
 
 test('stale conversation IDs are replaced only for 404 upload failures', () => {

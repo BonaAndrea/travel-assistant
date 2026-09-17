@@ -50,6 +50,13 @@ describe('resolver geografico', () => {
     await expect(resolveDestinationReference(spainDb, input)).resolves.toMatchObject({ id: 'destination-spain' });
   });
 
+  test.each(['Turkey', 'T\u00fcrkiye', 'turkiye', 'TR'])('risolve gli alias della Turchia seedata: %s', async (input) => {
+    const turkeyDb = { destination: { findMany: async () => [{
+      id: 'destination-turkey', country: 'Turchia', countryCode: 'TR', city: 'Istanbul', airports: [],
+    }] } };
+    await expect(resolveDestinationReference(turkeyDb, input)).resolves.toMatchObject({ id: 'destination-turkey' });
+  });
+
   test('normalizza il codice paese ISO alpha-2', () => {
     expect(normalizeCountryCode(' es ')).toBe('ES');
     expect(normalizeCountryCode('Spagna')).toBeNull();

@@ -122,8 +122,8 @@ prevista. Nel checkout condiviso il comando non è stato eseguito.
 5. Prenota una delle opzioni e verifica il risultato nella sezione **Le mie prenotazioni**.
 6. Usa **Storico** per riprendere una conversazione precedente.
 
-Il percorso demo utilizza gli stessi flussi autenticati dell’applicazione: non sono presenti
-bypass o dati demo impliciti nel frontend.
+**Percorso demo showcase**: utilizza gli stessi flussi autenticati dell’applicazione; non esistono bypass
+o dati demo impliciti nel frontend.
 
 ### Matrice browser/viewport verificata
 
@@ -162,10 +162,11 @@ dipendere da browser o credenziali LLM nella CI.
 
 ## Scenario di prova consigliato
 
-Il seed include 4 aeroporti italiani (`FCO`, `MXP`, `BLQ`, `NAP`) e 6 destinazioni in 5 paesi:
-Barcellona/Madrid (`ES`), Lisbona (`PT`), Parigi (`FR`), Atene (`GR`) e Praga (`CZ`).
-Le rotte andata/ritorno sono distribuite sui 12 mesi successivi, con partenze ai giorni 1,
-8, 15 e 22 e ritorni a +5 notti. Hotel e attività coprono le notti delle partenze seedate.
+Il seed include 7 aeroporti italiani (`FCO`, `MXP`, `BLQ`, `NAP`, `VCE`, `TRN`, `BRI`) e
+20 destinazioni europee in 15 paesi, da Barcellona e Madrid a Amsterdam, Berlino, Vienna,
+Budapest, Dublino, Istanbul, Dubrovnik e Cracovia. Le rotte andata/ritorno sono distribuite
+sui 12 mesi successivi, con partenze ogni 3–4 giorni (1, 4, 8, 11, 15, 18, 22 e 25) e ritorni
+a +5 notti. Hotel e attività coprono tutti i giorni reali di ciascun mese.
 La ricerca per nazione considera tutte le città del paese; la ricerca per città restringe volo,
 hotel e attività alla destinazione scelta.
 
@@ -262,9 +263,8 @@ il formato interno compatibile con Groq. Se Gemini non è configurato, il compor
 invariato. Il fallback non può garantire quote, latenza o disponibilità del piano gratuito Google:
 queste dipendono dall'account, dal modello e dalle policy correnti; verificare sempre il piano prima di
 impostare `GEMINI_FREE_TIER_CONFIRMED=true`. La chiave va mantenuta solo nell'env locale ignorato da Git.
-Per il fallback secondario `GEMINI_MAX_RETRIES` vale `0` per default: Groq applica già i propri retry,
-così un timeout Gemini non prolunga inutilmente il turno. Il parametro resta configurabile per ambienti
-che desiderano un retry aggiuntivo.
+Per il fallback secondario `GEMINI_MAX_RETRIES` vale `1` nell’esempio di configurazione; il parametro resta
+configurabile per ambienti che desiderano un retry aggiuntivo.
 Se una precondizione, il provider, il modello o l'output non sono disponibili, l'upload resta
 valido con analisi `metadata_only`; nessuna preferenza viene inventata e l'assistente chiede una
 descrizione testuale quando necessario.
@@ -272,10 +272,9 @@ La cancellazione della conversazione elimina anche i record e i file associati. 
 inviata al provider configurato solo quando vision e free tier sono esplicitamente confermati. Sebbene Qwen
 supporti richieste più grandi, l'applicazione mantiene intenzionalmente un solo file e il limite
 locale di 5 MiB per richiesta.
-L'analisi vision dell'upload usa un solo tentativo Groq per default (`GROQ_VISION_MAX_RETRIES=0`),
-poi passa al fallback Gemini se configurato; questo evita di bloccare il primo upload con retry duplicati.
-Anche il turno chat multimodale usa un solo tentativo Groq per default
-(`GROQ_CHAT_VISION_MAX_RETRIES=0`), poi passa al fallback Gemini senza trattenere il lock della conversazione.
+L'analisi vision dell'upload usa un retry Groq (`GROQ_VISION_MAX_RETRIES=1` nell’esempio),
+poi passa al fallback Gemini se configurato. Anche il turno chat multimodale usa un retry Groq
+(`GROQ_CHAT_VISION_MAX_RETRIES=1` nell’esempio), poi passa al fallback Gemini senza trattenere il lock della conversazione.
 Per includere immagini già caricate in un turno, il client invia `imageIds` insieme a `message`:
 il backend verifica ownership e conversazione, quindi usa il contenuto visuale solo con vision
 esplicitamente attiva; altrimenti conserva il percorso testuale e i metadati restano suggerimenti
@@ -375,8 +374,9 @@ travel-assistant/
 
 ### Copertura voli del seed
 
-Il seed corrente include gli aeroporti italiani `FCO`, `MXP`, `BLQ` e `NAP`, le destinazioni
-`BCN`, `MAD`, `LIS`, `CDG`, `ATH` e `PRG`, e 12 mesi consecutivi. Per ogni rotta sono presenti
-partenze ai giorni 1, 8, 15 e 22 e ritorni a +5 notti; hotel e attività coprono le relative date.
+Il seed corrente include gli aeroporti italiani `FCO`, `MXP`, `BLQ`, `NAP`, `VCE`, `TRN` e
+`BRI`, 20 destinazioni europee e 12 mesi consecutivi. Per ogni rotta sono presenti partenze
+ai giorni 1, 4, 8, 11, 15, 18, 22 e 25, con ritorno a +5 notti; hotel e attività coprono tutte
+le relative date.
 L'API distingue aeroporto non riconosciuto, destinazione non catalogata, mese senza partenze e
 ritorno incompatibile, proponendo date o mesi alternativi solo quando sono presenti nel catalogo.

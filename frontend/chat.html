@@ -819,7 +819,7 @@
       const requirements = issue.requirementsSnapshot || {};
       const outbound = issue.outbound || issue.flights?.outbound || {};
       const origin = outbound.originAirport?.iataCode || outbound.origin?.iataCode || issue.outboundOrigin || requirements.departureAirport;
-      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.country;
+      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.destinationCity || requirements.country;
       const outboundDate = outbound.date || issue.outboundDate || requirements.outboundDate || requirements.travelDate;
       const duration = Number(issue.durationDays || requirements.durationDays || 0);
       const formatDate = (value) => {
@@ -875,9 +875,12 @@
       if (!formatDate(outboundDate) || !formatDate(returnDate)) return fallback;
       const duration = Number(requirements.durationDays || 0)
         || Math.round((new Date(returnDate).getTime() - new Date(outboundDate).getTime()) / 86400000);
-      const route = requirements.departureAirport && (requirements.destinationAirport || requirements.country)
-        ? ` (${requirements.departureAirport} → ${requirements.destinationAirport || requirements.country})` : '';
-      return `**Riepilogo aggiornato**\n- Partenza${route}: ${formatDate(outboundDate)}\n- Ritorno: ${formatDate(returnDate)}\n- Durata: ${duration} giorni\n\nConfermi questi nuovi requisiti?`;
+      const destination = requirements.destinationCity || requirements.destinationAirport || requirements.country || 'da definire';
+      const route = requirements.departureAirport
+        ? ` (${requirements.departureAirport} → ${destination})` : ` (→ ${destination})`;
+      const preferences = Array.isArray(requirements.activityPreferences) && requirements.activityPreferences.length > 0
+        ? requirements.activityPreferences.join(', ') : 'da definire';
+      return `**Riepilogo aggiornato**\n- Destinazione: ${destination}\n- Partenza${route}: ${formatDate(outboundDate)}\n- Ritorno: ${formatDate(returnDate)}\n- Durata: ${duration} giorni\n- Partecipanti: ${requirements.participants || 'da definire'}\n- Budget totale: ${requirements.budget || 'da definire'}€\n- Preferenze: ${preferences}\n\nConfermi questi nuovi requisiti?`;
     }
 
     function generationIssueMessage(issue) {
@@ -885,7 +888,7 @@
       const requirements = issue.requirementsSnapshot || {};
       const outbound = issue.outbound || issue.flights?.outbound || {};
       const origin = outbound.originAirport?.iataCode || outbound.origin?.iataCode || issue.outboundOrigin || requirements.departureAirport;
-      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.country;
+      const destination = outbound.destinationAirport?.iataCode || outbound.destination?.iataCode || issue.outboundDestination || requirements.destinationAirport || requirements.destinationCity || requirements.country;
       const outboundDate = outbound.date || issue.outboundDate || requirements.outboundDate || requirements.travelDate;
       const duration = Number(issue.durationDays || requirements.durationDays || 0);
       const formatDate = (value) => {
@@ -1034,6 +1037,11 @@
           <p class="book-status" role="status" aria-live="polite"></p>
         `;
         container.appendChild(card);
+        // Le carte vengono create dopo l'inizializzazione dell'interruttore:
+        // eredita esplicitamente lo stato Extra, altrimenti i controlli share
+        // nuovi risultano visibili fino al prossimo cambio del toggle.
+        const shareControls = card.querySelector('.extra-share-controls');
+        if (shareControls) shareControls.hidden = localStorage.getItem(VOICE_ENABLED_KEY) !== 'true';
         removeFailedImages(card);
 
         const btn = card.querySelector('.book-btn');
@@ -1144,7 +1152,7 @@
           cooldownStorage()?.removeItem(REQUIREMENT_CORRECTION_KEY());
         }
             if (!data.retryable && !(returnChangeIntent && !requirementsChanged)) {
-              const reply = data.phase === 'confirming' && data.requirements && (requirementsChanged || returnChangeIntent)
+              const reply = data.phase === 'confirming' && !data.generationReady && data.requirements && (requirementsChanged || returnChangeIntent)
                 ? requirementsConfirmationMessage(data.requirements, data.reply) : data.reply;
               appendMessage('assistant', reply);
             }
