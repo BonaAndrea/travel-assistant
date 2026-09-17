@@ -14,7 +14,7 @@ from .conversations import router as conversations_router
 from .itineraries import router as itineraries_router
 from .shares import router as shares_router
 from .bookings import router as bookings_router
-from .jobs import router as jobs_router
+from .jobs import resume_pending_jobs, router as jobs_router
 from .images import router as images_router
 from .migrations import apply_migrations
 
@@ -31,6 +31,10 @@ async def lifespan(_app: FastAPI):
         # Liveness must remain available while readiness reports the external
         # dependency state. The error is intentionally not exposed to clients.
         print(f"Python migration skipped: {error}")
+    try:
+        await resume_pending_jobs()
+    except Exception as error:
+        logger.warning("pending job recovery skipped: %s", error)
     yield
 
 

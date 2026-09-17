@@ -1,7 +1,8 @@
+import asyncio
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
@@ -23,8 +24,8 @@ def job_json(row: tuple) -> dict:
     return {"id": row[0], "conversationId": row[1], "status": row[2], "progress": row[3], "progressLabel": row[4], "result": row[5], "error": row[6], "createdAt": row[7], "startedAt": row[8], "completedAt": row[9], "updatedAt": row[10]}
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
-def create_job(payload: JobRequest, user_id: UserId, background: BackgroundTasks) -> dict:
+@router.post("")
+def create_job(payload: JobRequest, user_id: UserId, background: BackgroundTasks, response: Response) -> dict:
     with connect() as connection:
         conversation = connection.execute('SELECT "state" FROM "Conversation" WHERE "id" = %s AND "userId" = %s', (payload.conversationId, user_id)).fetchone()
         if not conversation:
@@ -33,6 +34,7 @@ def create_job(payload: JobRequest, user_id: UserId, background: BackgroundTasks
         if existing:
             if existing[1] != payload.conversationId:
                 raise HTTPException(status_code=409, detail="Chiave di idempotenza già usata")
+            response.status_code = status.HTTP_200_OK
             return {"job": job_json(existing)}
         job_id = str(uuid4())
         snapshot = {"requirementsSnapshot": (conversation[0] or {}).get("requirements", {})}
@@ -42,6 +44,19 @@ def create_job(payload: JobRequest, user_id: UserId, background: BackgroundTasks
     return {"job": {"id": job_id, "conversationId": payload.conversationId, "status": "queued", "progress": 0, "progressLabel": "In coda", "result": snapshot, "error": None}}
 
 
+def pending_job_ids() -> list[str]:
+    with connect() as connection:
+        rows = connection.execute(
+            'SELECT "id" FROM "ItineraryGenerationJob" WHERE "status" IN (\'queued\', \'running\')'
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+async def resume_pending_jobs() -> None:
+    for job_id in pending_job_ids():
+        asyncio.create_task(asyncio.to_thread(run_job, job_id))
+
+
 @router.get("/{job_id}")
 def get_job(job_id: str, user_id: UserId) -> dict:
     with connect() as connection:
@@ -49,4 +64,3 @@ def get_job(job_id: str, user_id: UserId) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Job non trovato")
     return {"job": job_json(row)}
-
