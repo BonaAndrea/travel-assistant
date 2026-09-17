@@ -5,7 +5,11 @@ import {
 
 describe('Groq model configuration', () => {
   test('usa un modello attualmente supportato da Groq', () => {
-    expect(DEFAULT_MODEL).toBe('llama-3.3-70b-versatile');
+    expect(DEFAULT_MODEL).toBe('qwen/qwen3.8-27b');
+  });
+
+  test('salta un modello Groq ritirato anche se ancora presente nell ambiente', () => {
+    expect(getCandidateModels('llama-3.3-70b-versatile')[0]).toBe('qwen/qwen3.8-27b');
   });
 
   test('espone una configurazione runtime sicura per timeout, retry e circuito', () => {

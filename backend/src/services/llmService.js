@@ -37,17 +37,19 @@ export const LLM_RESILIENCE_CONFIG = Object.freeze({
 const groq = process.env.GROQ_API_KEY
   ? new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: LLM_TIMEOUT_MS, maxRetries: 0 })
   : null;
-export const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile non è più disponibile per questo account Groq.
+// Qwen 3.8 resta un modello Groq con tool calling e vision supportati.
+export const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
 export const FALLBACK_MODELS = [
   DEFAULT_MODEL,
   'openai/gpt-oss-20b',
-  'llama-3.1-8b-instant',
-  'meta-llama/llama-4-scout-17b-16e-instruct',
 ];
+
+const RETIRED_MODELS = new Set(['llama-3.3-70b-versatile']);
 
 export function getCandidateModels(configuredModel) {
   const models = [];
-  if (configuredModel) models.push(configuredModel);
+  if (configuredModel && !RETIRED_MODELS.has(configuredModel)) models.push(configuredModel);
   for (const model of FALLBACK_MODELS) {
     if (!models.includes(model)) models.push(model);
   }
