@@ -109,6 +109,15 @@ con dati utente senza backup e approvazione esplicita. Dopo il seed va riavviato
 svuotare eventuali cache locali e va verificato che lo storage immagini punti alla directory
 prevista. Nel checkout condiviso il comando non è stato eseguito.
 
+### Seed remoto senza Shell Render
+
+Il workflow GitHub Actions **Rigenera catalogo demo** è avviabile solo manualmente e non parte
+con il deploy. Per usarlo sul database Neon, aggiungere il secret repository
+`NEON_DATABASE_URL` con la stringa di connessione del database demo. In **Actions**, selezionare
+il workflow, premere **Run workflow** e scrivere esattamente `RIGENERA-CATALOGO` nel campo di
+conferma. Il workflow applica prima le migrazioni e poi esegue il seed; valgono quindi tutte le
+avvertenze distruttive riportate sopra.
+
 ### Demo rapida
 
 1. Avvia il progetto e crea un account.
