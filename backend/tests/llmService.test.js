@@ -1,5 +1,5 @@
 import {
-  buildSystemPrompt, DEFAULT_MODEL, LLM_RESILIENCE_CONFIG, LLM_TIMEOUT_MS, sanitizeLlmOutput,
+  buildSystemPrompt, DEFAULT_MODEL, getCandidateModels, LLM_RESILIENCE_CONFIG, LLM_TIMEOUT_MS, sanitizeLlmOutput,
   CHAT_VISION_MAX_RETRIES, enforceItalianAssistantMessage,
 } from '../src/services/llmService.js';
 

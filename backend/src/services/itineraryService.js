@@ -479,6 +479,55 @@ export function optimizeActivitySelection({
 }
 
 /**
+ * Il beam solver privilegia qualità e varietà; se raggiunge il suo limite di
+ * tempo, completiamo i giorni rimasti con una scelta lineare verificabile.
+ * L'itinerario demo richiede una sola attività principale per giorno, quindi
+ * questa fase non introduce conflitti di orario tra attività della stessa data.
+ */
+export function completeActivityCoverage(selection, {
+  candidatesByDate, participants, budgetRemaining,
+}) {
+  const chosen = [...selection.chosen];
+  const coveredDays = new Set(chosen.map((item) => item.day));
+  let cost = selection.cost;
+
+  for (let index = 0; index < candidatesByDate.length; index++) {
+    const day = index + 1;
+    if (coveredDays.has(day)) continue;
+    const { date, candidates = [] } = candidatesByDate[index];
+    const candidate = candidates.find(({ availability }) => {
+      const activityCost = Number(availability.cost) * participants;
+      const freeCapacity = Number(availability.capacity) - Number(availability.booked || 0);
+      return freeCapacity >= participants
+        && activityTimeWindow(availability)
+        && Number.isFinite(activityCost)
+        && cost + activityCost <= budgetRemaining;
+    });
+    if (!candidate) continue;
+    const activityCost = Number(candidate.availability.cost) * participants;
+    chosen.push(chosenActivity(candidate, date, day, activityCost));
+    cost += activityCost;
+    coveredDays.add(day);
+  }
+
+  const sortedChosen = chosen.sort((left, right) => left.day - right.day);
+  const sortedCoveredDays = [...coveredDays].sort((left, right) => left - right);
+  const uncoveredDays = Array.from({ length: candidatesByDate.length }, (_, index) => index + 1)
+    .filter((day) => !coveredDays.has(day));
+  return {
+    ...selection,
+    chosen: sortedChosen,
+    cost,
+    coveredDays: sortedCoveredDays,
+    uncoveredDays,
+    daysWithoutActivity: uncoveredDays.length,
+    // La fase lineare ha verificato tutti i giorni rimasti: non presentiamo un
+    // timeout del solver come indisponibilità del catalogo.
+    timedOut: false,
+  };
+}
+
+/**
  * Recupera le disponibilità e prepara i candidati per l'ottimizzatore globale.
  */
 async function selectActivities(
@@ -552,13 +601,16 @@ async function selectActivities(
   // Nell'itinerario demo proponiamo una sola attività principale al giorno.
   // Evita che il solver esplori combinazioni superflue (e che sulle istanze
   // con CPU ridotta esaurisca il tempo pur avendo attività disponibili).
-  return optimizeActivitySelection({
+  const selection = optimizeActivitySelection({
     days,
     participants,
     budgetRemaining,
     candidatesByDate,
     maxActivitiesPerDay: 1,
   });
+  return selection.uncoveredDays.length > 0
+    ? completeActivityCoverage(selection, { candidatesByDate, participants, budgetRemaining })
+    : selection;
 }
 
 /**
