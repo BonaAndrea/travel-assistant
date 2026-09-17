@@ -164,6 +164,13 @@ export async function semanticSearch(query, {
   const candidates = filterRetrievalCandidates(index, {
     type, country, destinationId, destinationCity,
   });
+  // Un seed rigenera gli ID relazionali. Se l'istanza conserva un indice
+  // precedente, i suoi metadata non trovano più la nuova destinazione: in
+  // quel caso il catalogo relazionale è la fonte autorevole, non un "nessun
+  // risultato" artificiale.
+  if (candidates.length === 0) {
+    return relationalFallbackSearch({ type, country, destinationId, destinationCity, topK });
+  }
 
   return candidates
     .map((d) => ({ ...d, score: cosineSim(qVector, d.vector) }))

@@ -80,3 +80,23 @@ test('usa il catalogo relazionale se l’indice file non è presente', async () 
   expect(results).toMatchObject([{ id: 'budapest-cultural', score: 0 }]);
   findMany.mockRestore();
 });
+
+test('usa il catalogo relazionale quando l’indice esistente è obsoleto', async () => {
+  fs.writeFileSync(indexPath, JSON.stringify([{
+    id: 'old-budapest', type: 'activity', vector: [1, 0],
+    metadata: { country: 'Ungheria', city: 'Budapest', destinationId: 'old-destination-id' },
+  }]));
+  const findMany = jest.spyOn(prisma.activity, 'findMany').mockResolvedValue([{
+    id: 'new-budapest', name: 'Museo - Budapest', category: 'cultura',
+    city: 'Budapest', country: 'Ungheria', destinationId: 'new-destination-id',
+  }]);
+
+  const results = await semanticSearch('cultura', {
+    type: 'activity', country: 'Ungheria', destinationId: 'new-destination-id',
+    destinationCity: 'Budapest', topK: 20,
+  });
+
+  expect(findMany).toHaveBeenCalledWith({ where: { destinationId: 'new-destination-id' }, take: 20 });
+  expect(results).toMatchObject([{ id: 'new-budapest', score: 0 }]);
+  findMany.mockRestore();
+});
