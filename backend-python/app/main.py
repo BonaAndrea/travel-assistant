@@ -17,6 +17,7 @@ from .bookings import router as bookings_router
 from .jobs import resume_pending_jobs, router as jobs_router
 from .images import router as images_router
 from .migrations import apply_migrations
+from .metrics import increment, observe, metrics_endpoint, request_started
 
 
 settings = get_settings()
@@ -51,7 +52,11 @@ app.add_middleware(
 @app.middleware("http")
 async def request_logging(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
+    started = request_started()
     response = await call_next(request)
+    labels = {"method": request.method, "route": request.url.path, "status": response.status_code}
+    increment("http_requests_total", labels)
+    observe("http_request_duration_ms", (request_started() - started) * 1000, labels)
     response.headers["x-request-id"] = request_id
     logger.info("request method=%s path=%s status=%s request_id=%s", request.method, request.url.path, response.status_code, request_id)
     return response
@@ -62,6 +67,11 @@ app.include_router(shares_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(images_router, prefix=settings.api_prefix)
+
+
+@app.get(f"{settings.api_prefix}/metrics", tags=["system"])
+def metrics(request: Request) -> dict:
+    return metrics_endpoint(request)
 
 
 @app.exception_handler(RequestValidationError)
