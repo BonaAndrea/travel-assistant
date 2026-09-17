@@ -124,6 +124,12 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
         raise HTTPException(status_code=404, detail="Conversazione non trovata") from error
 
     with connect() as connection:
+        locked = connection.execute(
+            "SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0))",
+            (f"conversation:{conversation_id}",),
+        ).fetchone()[0]
+        if not locked:
+            raise HTTPException(status_code=409, detail="La conversazione è già impegnata da un'altra richiesta")
         row = connection.execute(
             'SELECT "state" FROM "Conversation" WHERE "id" = %s AND "userId" = %s',
             (conversation_id, user_id),
