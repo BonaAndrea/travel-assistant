@@ -53,7 +53,18 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
             (origin, destination, destination, departure or month_start, (arrival + timedelta(days=1)) if arrival else month_end, participants),
         ).fetchone()
         if not outbound:
-            return {"error": "Non sono disponibili voli di andata compatibili.", "errorCode": "no_outbound"}
+            alternatives = connection.execute(
+                'SELECT f."date", f."cost", da."city" FROM "Flight" f '
+                'JOIN "Airport" oa ON oa."id" = f."originAirportId" '
+                'JOIN "Airport" da ON da."id" = f."destinationAirportId" '
+                'JOIN "Destination" d ON d."id" = da."destinationId" '
+                'WHERE f."direction" = \'outbound\' AND oa."iataCode" = %s '
+                'AND (LOWER(da."city") = LOWER(%s) OR LOWER(d."country") = LOWER(%s)) '
+                'AND f."date" >= %s AND f."seatsAvailable" >= %s ORDER BY f."date", f."cost" LIMIT 6',
+                (origin, destination, destination, date.today(), participants),
+            ).fetchall()
+            return {"error": "Non sono disponibili voli di andata compatibili.", "errorCode": "no_outbound",
+                    "alternatives": [{"date": row[0].isoformat(), "city": row[2], "cost": row[1]} for row in alternatives]}
         departure = outbound[1].date() if hasattr(outbound[1], "date") else outbound[1]
         expected_return = arrival or (departure + timedelta(days=nights))
         arrival = expected_return
@@ -68,7 +79,14 @@ def generate(requirements: dict, progress: Callable[[int, str], None] | None = N
             (outbound[5], origin, expected_return, expected_return + timedelta(days=1), participants),
         ).fetchone()
         if not inbound:
-            return {"error": "Non è disponibile un volo di ritorno nella data richiesta.", "errorCode": "no_return"}
+            alternatives = connection.execute(
+                'SELECT f."date", f."cost" FROM "Flight" f '
+                'WHERE f."direction" = \'return\' AND f."originAirportId" = %s AND f."destinationAirportId" = %s '
+                'AND f."date" > %s AND f."seatsAvailable" >= %s ORDER BY f."date", f."cost" LIMIT 6',
+                (outbound[5], outbound[6] and connection.execute('SELECT "id" FROM "Airport" WHERE "iataCode" = %s', (origin,)).fetchone()[0], expected_return, participants),
+            ).fetchall()
+            return {"error": "Non è disponibile un volo di ritorno nella data richiesta.", "errorCode": "no_return",
+                    "alternatives": [{"availableReturnDate": row[0].isoformat(), "cost": row[1]} for row in alternatives]}
 
         progress(35, "Ricerca hotel")
         hotel = connection.execute(

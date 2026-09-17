@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import logging
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +20,7 @@ from .migrations import apply_migrations
 
 
 settings = get_settings()
+logger = logging.getLogger("travel-assistant-python")
 
 
 @asynccontextmanager
@@ -34,11 +37,20 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],
+    allow_origins=["http://localhost:8080", "http://localhost:8081", "http://127.0.0.1:8080", "http://127.0.0.1:8081"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid4())
+    response = await call_next(request)
+    response.headers["x-request-id"] = request_id
+    logger.info("request method=%s path=%s status=%s request_id=%s", request.method, request.url.path, response.status_code, request_id)
+    return response
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(conversations_router, prefix=settings.api_prefix)
 app.include_router(itineraries_router, prefix=settings.api_prefix)

@@ -6,14 +6,15 @@ from uuid import uuid4
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Cookie, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from .config import get_settings
 from .database import connect
+from .rate_limit import auth_rate_limit
 
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(auth_rate_limit)])
 REFRESH_COOKIE = "refresh_token"
 REFRESH_TTL = timedelta(days=30)
 

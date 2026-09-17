@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from .database import connect
@@ -82,8 +82,8 @@ def _booking_json(row: tuple) -> dict:
     return {"id": row[0], "userId": row[1], "itineraryId": row[2], "status": row[3], "idempotencyKey": row[4], "failureReason": row[5], "cancelledAt": row[6], "cancellationReason": row[7], "createdAt": row[8]}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-def confirm_booking(payload: BookingRequest, user_id: UserId) -> dict:
+@router.post("")
+def confirm_booking(payload: BookingRequest, user_id: UserId, response: Response) -> dict:
     try:
         with connect() as connection:
             existing = connection.execute(
@@ -93,6 +93,7 @@ def confirm_booking(payload: BookingRequest, user_id: UserId) -> dict:
             if existing:
                 if existing[1] != user_id or existing[2] != payload.itineraryId:
                     raise HTTPException(status_code=409, detail="Chiave di idempotenza già utilizzata per un’altra richiesta")
+                response.status_code = status.HTTP_200_OK
                 return {"booking": _booking_json(existing), "alreadyProcessed": True}
             itinerary = connection.execute(
                 'SELECT "id", "userId", "status", "details" FROM "Itinerary" WHERE "id" = %s AND "userId" = %s',
@@ -134,9 +135,30 @@ def confirm_booking(payload: BookingRequest, user_id: UserId) -> dict:
             connection.commit()
             return {"booking": _booking_json(booking), "alreadyProcessed": False}
     except HTTPException as error:
-        # The connection context rolled the transaction back. Preserve the
-        # original business error; no partial reservation survives.
-        raise error
+        # The reservation transaction is rolled back. Keep a separate failed
+        # record for auditability and idempotent replay, matching the Node
+        # lifecycle contract without exposing a partial success.
+        with connect() as failure_connection:
+            existing = failure_connection.execute(
+                'SELECT "id", "userId", "itineraryId", "status", "idempotencyKey", "failureReason", "cancelledAt", "cancellationReason", "createdAt" FROM "Booking" WHERE "idempotencyKey" = %s',
+                (payload.idempotencyKey,),
+            ).fetchone()
+            if existing:
+                response.status_code = status.HTTP_409_CONFLICT
+                return {"booking": _booking_json(existing), "alreadyProcessed": True, "error": existing[5]}
+            itinerary = failure_connection.execute(
+                'SELECT "id" FROM "Itinerary" WHERE "id" = %s AND "userId" = %s',
+                (payload.itineraryId, user_id),
+            ).fetchone()
+            if not itinerary:
+                raise error
+            failed = failure_connection.execute(
+                'INSERT INTO "Booking" ("id", "userId", "itineraryId", "status", "idempotencyKey", "failureReason", "createdAt") VALUES (%s, %s, %s, \'failed\', %s, %s, NOW()) RETURNING "id", "userId", "itineraryId", "status", "idempotencyKey", "failureReason", "cancelledAt", "cancellationReason", "createdAt"',
+                (str(uuid4()), user_id, payload.itineraryId, payload.idempotencyKey, str(error.detail)[:1000]),
+            ).fetchone()
+            failure_connection.commit()
+        response.status_code = status.HTTP_409_CONFLICT
+        return {"booking": _booking_json(failed), "alreadyProcessed": False, "error": str(error.detail)}
 
 
 @router.delete("/{booking_id}")
