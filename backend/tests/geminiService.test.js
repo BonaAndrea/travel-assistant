@@ -1,4 +1,4 @@
-import { fromGeminiResponse, toGeminiMessages, toGeminiTools } from '../src/services/geminiService.js';
+import { fromGeminiResponse, getGeminiModelCandidates, toGeminiMessages, toGeminiTools } from '../src/services/geminiService.js';
 
 describe('Gemini adapter contract', () => {
   test('traduce immagini inline e tool nel formato Gemini', () => {
@@ -17,6 +17,11 @@ describe('Gemini adapter contract', () => {
     } }])).toEqual([{ functionDeclarations: [{
       name: 'update_requirements', description: 'Aggiorna', parameters: { type: 'object' },
     }] }]);
+  });
+
+  test('mantiene un modello Gemini stabile quando quello configurato viene ritirato', () => {
+    expect(getGeminiModelCandidates('gemini-2.5-flash-lite'))
+      .toEqual(['gemini-2.5-flash-lite', 'gemini-3.5-flash-lite']);
   });
 
   test('riconsegna testo e function call nel formato interno OpenAI-like', () => {

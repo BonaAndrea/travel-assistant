@@ -37,17 +37,19 @@ export const LLM_RESILIENCE_CONFIG = Object.freeze({
 const groq = process.env.GROQ_API_KEY
   ? new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: LLM_TIMEOUT_MS, maxRetries: 0 })
   : null;
-export const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile non è più disponibile per questo account Groq.
+// Qwen 3.8 resta un modello Groq con tool calling e vision supportati.
+export const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
 export const FALLBACK_MODELS = [
   DEFAULT_MODEL,
   'openai/gpt-oss-20b',
-  'llama-3.1-8b-instant',
-  'meta-llama/llama-4-scout-17b-16e-instruct',
 ];
+
+const RETIRED_MODELS = new Set(['llama-3.3-70b-versatile']);
 
 export function getCandidateModels(configuredModel) {
   const models = [];
-  if (configuredModel) models.push(configuredModel);
+  if (configuredModel && !RETIRED_MODELS.has(configuredModel)) models.push(configuredModel);
   for (const model of FALLBACK_MODELS) {
     if (!models.includes(model)) models.push(model);
   }
@@ -185,20 +187,20 @@ const REQUIREMENT_TOOL = {
     parameters: {
       type: 'object',
       properties: {
-        budget: { type: 'number', description: 'Budget totale in EUR' },
-        country: { type: 'string', description: 'Nazione di destinazione' },
-        destinationCity: { type: 'string', description: 'Città di destinazione, se indicata o confermata dallutente' },
-        departureAirport: { type: 'string', description: 'Aeroporto/città di partenza' },
+        budget: { type: ['number', 'null'], description: 'Budget totale in EUR; ometti il campo se non fornito' },
+        country: { type: ['string', 'null'], description: 'Nazione di destinazione; ometti il campo se non fornito' },
+        destinationCity: { type: ['string', 'null'], description: 'Città di destinazione, se indicata o confermata dallutente' },
+        departureAirport: { type: ['string', 'null'], description: 'Aeroporto/città di partenza; ometti il campo se non fornito' },
         activityPreferences: {
-          type: 'array',
+          type: ['array', 'null'],
           items: { type: 'string' },
-          description: 'es. cultura, sport, relax, nightlife',
+          description: 'es. cultura, sport, relax, nightlife; ometti il campo se non fornito',
         },
-        travelMonth: { type: 'string', description: 'Mese di viaggio, es. "luglio"' },
-        durationDays: { type: 'number', description: 'Durata del viaggio in giorni' },
-        participants: { type: 'number', description: 'Numero di partecipanti' },
-        outboundDate: { type: 'string', description: 'Data di partenza esplicita in formato ISO, se fornita' },
-        returnDate: { type: 'string', description: 'Data di ritorno esplicita in formato ISO, se fornita' },
+        travelMonth: { type: ['string', 'null'], description: 'Mese di viaggio, es. "luglio"; ometti il campo se non fornito' },
+        durationDays: { type: ['number', 'null'], description: 'Durata del viaggio in giorni; ometti il campo se non fornito' },
+        participants: { type: ['number', 'null'], description: 'Numero di partecipanti; ometti il campo se non fornito' },
+        outboundDate: { type: ['string', 'null'], description: 'Data di partenza esplicita in formato ISO, se fornita' },
+        returnDate: { type: ['string', 'null'], description: 'Data di ritorno esplicita in formato ISO, se fornita' },
       },
     },
   },
@@ -233,7 +235,7 @@ ${generationContext}
 Regole:
 - VINCOLO DI LINGUA: ogni testo destinato all'utente deve essere esclusivamente in italiano, anche dopo errori, timeout, fallback di provider, tool call e richieste di conferma. Non usare frasi inglesi.
 - Se manca un dato o è ambiguo/incoerente (es. durata 10 giorni ma budget palesemente insufficiente per un volo+hotel), chiedi UN chiarimento alla volta, in modo naturale.
-- Se l'utente fornisce o modifica un dato, chiama SEMPRE il tool update_requirements con solo i campi nuovi/cambiati.
+- Se l'utente fornisce o modifica un dato, chiama SEMPRE il tool update_requirements con solo i campi nuovi/cambiati. Non inviare mai null: ometti i campi che non aggiorni.
 - Se l'utente indica o conferma una città specifica, salva anche destinationCity oltre alla nazione. Non sostituire una città confermata con un'altra città della stessa nazione.
 - Quando tutti i dati sono presenti e coerenti, riepiloga i requisiti usando SEMPRE un elenco puntato chiaro e leggibile con trattini (es. "- Destinazione: Spagna", "- Budget: 1000€"), MAI tabelle Markdown (|), e chiedi conferma esplicita prima di generare l'itinerario.
 - Non inventare voli/hotel/attività: quello lo fa un altro componente del sistema, tu gestisci solo la raccolta dati e la conversazione.
@@ -283,7 +285,10 @@ export async function chatTurn(history, requirements, phase, preferenceImages = 
   for (const call of toolCalls) {
     if (call.function.name === 'update_requirements') {
       try {
-        updatedFields = { ...updatedFields, ...JSON.parse(call.function.arguments) };
+        const parsed = JSON.parse(call.function.arguments);
+        const nonNullFields = Object.fromEntries(Object.entries(parsed || {})
+          .filter(([, value]) => value !== null && value !== undefined));
+        updatedFields = { ...updatedFields, ...nonNullFields };
       } catch {
         // argomenti malformati: ignoriamo l'update, la conversazione prosegue comunque
       }

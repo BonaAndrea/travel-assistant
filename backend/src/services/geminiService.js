@@ -9,7 +9,8 @@ const enabled = process.env.GEMINI_ENABLED === 'true'
   && Boolean(process.env.GEMINI_API_KEY)
   && process.env.GEMINI_FREE_TIER_CONFIRMED === 'true';
 const visionEnabled = enabled && process.env.GEMINI_VISION_ENABLED === 'true';
-const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
 const timeoutMs = Number.isSafeInteger(Number(process.env.GEMINI_TIMEOUT_MS))
   && Number(process.env.GEMINI_TIMEOUT_MS) > 0 ? Number(process.env.GEMINI_TIMEOUT_MS) : 10000;
 const maxRetries = Number.isSafeInteger(Number(process.env.GEMINI_MAX_RETRIES))
@@ -18,6 +19,12 @@ const maxRetries = Number.isSafeInteger(Number(process.env.GEMINI_MAX_RETRIES))
 export const GEMINI_ENABLED = enabled;
 export const GEMINI_VISION_ENABLED = visionEnabled;
 export const GEMINI_MODEL = model;
+export function getGeminiModelCandidates(configuredModel = model) {
+  // Un modello configurato può essere ritirato dal provider. Manteniamo un
+  // fallback stabile per non rendere indisponibile l'intera chat dopo una
+  // deprecazione, senza sostituire la preferenza esplicita al primo tentativo.
+  return [...new Set([configuredModel, DEFAULT_GEMINI_MODEL])];
+}
 
 function dataUrlPart(url) {
   const match = String(url || '').match(/^data:([^;]+);base64,(.+)$/s);
@@ -74,7 +81,15 @@ export function toGeminiTools(tools = []) {
   const declarations = tools.map((tool) => tool?.function).filter(Boolean).map((fn) => ({
     name: fn.name,
     description: fn.description,
-    parameters: fn.parameters,
+    // Groq ammette union type con null per i campi opzionali; il formato
+    // function declaration di Gemini richiede invece il tipo concreto.
+    parameters: fn.parameters?.properties ? {
+      ...fn.parameters,
+      properties: Object.fromEntries(Object.entries(fn.parameters.properties).map(([name, property]) => [name, {
+        ...property,
+        ...(Array.isArray(property.type) ? { type: property.type.find((type) => type !== 'null') } : {}),
+      }])),
+    } : fn.parameters,
   }));
   return declarations.length ? [{ functionDeclarations: declarations }] : undefined;
 }
@@ -107,39 +122,50 @@ export function createGeminiCompletion(fetchImpl = fetch, run = createLlmResilie
       ...(tools ? { tools } : {}),
       ...(payload.temperature == null ? {} : { generationConfig: { temperature: payload.temperature } }),
     };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await run(() => fetchImpl(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        },
-      ).then(async (result) => {
-        const body = await result.json().catch(() => ({}));
-        if (!result.ok) {
-          const error = new Error(body?.error?.message || `Gemini HTTP ${result.status}`);
-          error.status = result.status;
-          throw error;
+      let lastError;
+      for (const candidateModel of getGeminiModelCandidates()) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await run(() => fetchImpl(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidateModel)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            },
+          ).then(async (result) => {
+            const body = await result.json().catch(() => ({}));
+            if (!result.ok) {
+              const error = new Error(body?.error?.message || `Gemini HTTP ${result.status}`);
+              error.status = result.status;
+              throw error;
+            }
+            return fromGeminiResponse(body);
+          }).catch((error) => {
+            if (error?.name === 'AbortError') {
+              const timeoutError = new Error('Gemini request timeout');
+              timeoutError.code = 'ETIMEDOUT';
+              throw timeoutError;
+            }
+            throw error;
+          }));
+        } catch (error) {
+          lastError = error;
+          if (error?.status !== 404 || candidateModel === DEFAULT_GEMINI_MODEL) throw error;
+          logLlmEvent('llm_gemini_model_fallback', {
+            provider: 'gemini', from: candidateModel, to: DEFAULT_GEMINI_MODEL, ...llmErrorFields(error),
+          });
+        } finally {
+          clearTimeout(timer);
         }
-        return fromGeminiResponse(body);
-      }).catch((error) => {
-        if (error?.name === 'AbortError') {
-          const timeoutError = new Error('Gemini request timeout');
-          timeoutError.code = 'ETIMEDOUT';
-          throw timeoutError;
-        }
-        throw error;
-      }));
-      return response;
+      }
+      throw lastError;
     } catch (error) {
       logLlmEvent('llm_gemini_error', { ...llmErrorFields(error) });
       throw error;
-    } finally {
-      clearTimeout(timer);
     }
   };
 }

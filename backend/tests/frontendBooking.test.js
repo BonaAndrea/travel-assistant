@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const html = readFileSync(new URL('../../frontend/chat.html', import.meta.url), 'utf8');
-const bookingCode = html.slice(html.indexOf("        const btn = card.querySelector('.book-btn');"), html.indexOf('\n      });\n    }', html.indexOf("        const btn = card.querySelector('.book-btn');")));
+const bookingStart = html.indexOf("const btn = card.querySelector('.book-btn');");
+const bookingScopeEnd = html.indexOf('\n    async function send', bookingStart);
+// La carta può contenere altri handler (condivisione, extra, ...) prima del
+// blocco di prenotazione. Estrarre fino alla funzione seguente, rimuovendo
+// solo le due chiusure del forEach/render, evita di dipendere dall'indentazione.
+const bookingCode = html.slice(bookingStart, bookingScopeEnd)
+  .replace(/\n\s*}\);\s*\n\s*}\s*$/, '');
 
 function mount(api, storage = new Map()) {
   let click;

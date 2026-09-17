@@ -1,4 +1,4 @@
-import { monthToDateRange, optimizeActivitySelection } from '../src/services/itineraryService.js';
+import { completeActivityCoverage, monthToDateRange, optimizeActivitySelection } from '../src/services/itineraryService.js';
 import { normalizeLocation } from '../src/services/locationNormalization.js';
 
 describe('normalizzazione riferimenti geografici', () => {
@@ -110,6 +110,40 @@ describe('monthToDateRange', () => {
       expect(result.chosen.map((item) => item.activityId)).toEqual(['morning', 'afternoon']);
       expect(result.cost).toBe(15);
       expect(result.chosen[0].endMinute).toBeLessThanOrEqual(result.chosen[1].startMinute);
+      expect(result.timedOut).toBe(false);
+    });
+
+    test('puÃ² limitare l’itinerario a una attivitÃ  principale per giornata', () => {
+      const result = optimizeActivitySelection({
+        days: 2,
+        participants: 1,
+        budgetRemaining: 100,
+        maxActivitiesPerDay: 1,
+        candidatesByDate: [
+          { date: '2026-10-01', candidates: [candidate('morning', 1, 'cultura', 5), candidate('afternoon', 0.9, 'sport', 5)] },
+          { date: '2026-10-02', candidates: [candidate('evening', 1, 'relax', 5), candidate('night', 0.9, 'nightlife', 5)] },
+        ],
+      });
+
+      expect(result.chosen).toHaveLength(2);
+      expect(result.daysWithoutActivity).toBe(0);
+    });
+
+    test('completa in modo deterministico i giorni lasciati scoperti dal solver', () => {
+      const result = completeActivityCoverage({
+        chosen: [], cost: 0, coveredDays: [], uncoveredDays: [1, 2], daysWithoutActivity: 2, timedOut: true,
+      }, {
+        participants: 2,
+        budgetRemaining: 30,
+        candidatesByDate: [
+          { date: '2026-10-01', candidates: [candidate('museum', 0, 'cultura', 5, [0], 0, 4)] },
+          { date: '2026-10-02', candidates: [candidate('tour', 0, 'cultura', 5, [0], 0, 4)] },
+        ],
+      });
+
+      expect(result.chosen.map((item) => item.activityId)).toEqual(['museum', 'tour']);
+      expect(result.cost).toBe(20);
+      expect(result.uncoveredDays).toEqual([]);
       expect(result.timedOut).toBe(false);
     });
 

@@ -115,6 +115,38 @@ export function filterRetrievalCandidates(documents, {
 }
 
 /**
+ * Il filesystem delle istanze gratuite è effimero. Quando l'indice RAG non è
+ * presente, il fallback relazionale mantiene la generazione disponibile senza
+ * caricare il modello di embedding durante una richiesta utente.
+ */
+async function relationalFallbackSearch({
+  type, country, destinationId, destinationCity, topK,
+}) {
+  if (type !== 'activity') return [];
+  const where = destinationId
+    ? { destinationId }
+    : destinationCity
+      ? { city: { equals: destinationCity, mode: 'insensitive' } }
+      : country
+        ? { country: { equals: country, mode: 'insensitive' } }
+        : {};
+  const activities = await prisma.activity.findMany({ where, take: topK });
+  return activities.map((activity) => ({
+    id: activity.id,
+    type: 'activity',
+    text: `${activity.name} (${activity.category}) a ${activity.city}, ${activity.country}.`,
+    metadata: {
+      name: activity.name,
+      category: activity.category,
+      city: activity.city,
+      country: activity.country,
+      destinationId: activity.destinationId,
+    },
+    score: 0,
+  }));
+}
+
+/**
  * Retrieval semantico: dato un testo libero (es. preferenze utente "relax e cultura in famiglia"),
  * ritorna i documenti più affini, opzionalmente filtrati per tipo/paese.
  */
@@ -122,7 +154,9 @@ export async function semanticSearch(query, {
   type, country, destinationId, destinationCity, topK = 5,
 } = {}) {
   const index = loadIndex();
-  if (index.length === 0) return [];
+  if (index.length === 0) {
+    return relationalFallbackSearch({ type, country, destinationId, destinationCity, topK });
+  }
 
   const qVector = await embed(query);
   // Apply all relational filters before ranking/topK so national results cannot crowd out
@@ -130,6 +164,13 @@ export async function semanticSearch(query, {
   const candidates = filterRetrievalCandidates(index, {
     type, country, destinationId, destinationCity,
   });
+  // Un seed rigenera gli ID relazionali. Se l'istanza conserva un indice
+  // precedente, i suoi metadata non trovano più la nuova destinazione: in
+  // quel caso il catalogo relazionale è la fonte autorevole, non un "nessun
+  // risultato" artificiale.
+  if (candidates.length === 0) {
+    return relationalFallbackSearch({ type, country, destinationId, destinationCity, topK });
+  }
 
   return candidates
     .map((d) => ({ ...d, score: cosineSim(qVector, d.vector) }))

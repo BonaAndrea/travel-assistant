@@ -145,6 +145,7 @@ export async function main() {
   }
 
   for (const [destinationIndex, definition] of destinations.entries()) {
+    console.log(`Catalogazione destinazione ${destinationIndex + 1}/${destinations.length} in corso: ${definition.city} (${definition.countryCode})`);
     const destination = await prisma.destination.create({
       data: {
         country: definition.country,
@@ -162,33 +163,31 @@ export async function main() {
       },
     });
 
+    const flights = [];
     for (const origin of origins) {
       for (const month of months) {
         for (const [dayIndex, date] of month.departureDates.entries()) {
           const baseCost = definition.flightBase + origin.costBias + (dayIndex % 3) * 4;
-          await prisma.flight.create({
-            data: {
-              originAirportId: originAirports[origin.iata].id,
-              destinationAirportId: destinationAirport.id,
-              direction: 'outbound',
-              date,
-              seatsAvailable: 6,
-              cost: baseCost,
-            },
+          flights.push({
+            originAirportId: originAirports[origin.iata].id,
+            destinationAirportId: destinationAirport.id,
+            direction: 'outbound',
+            date,
+            seatsAvailable: 6,
+            cost: baseCost,
           });
-          await prisma.flight.create({
-            data: {
-              originAirportId: destinationAirport.id,
-              destinationAirportId: originAirports[origin.iata].id,
-              direction: 'return',
-              date: new Date(date.getTime() + 5 * 86400000),
-              seatsAvailable: 6,
-              cost: baseCost + 8 + (dayIndex % 2) * 3,
-            },
+          flights.push({
+            originAirportId: destinationAirport.id,
+            destinationAirportId: originAirports[origin.iata].id,
+            direction: 'return',
+            date: new Date(date.getTime() + 5 * 86400000),
+            seatsAvailable: 6,
+            cost: baseCost + 8 + (dayIndex % 2) * 3,
           });
         }
       }
     }
+    await prisma.flight.createMany({ data: flights });
 
     const hotels = await Promise.all([
       prisma.hotel.create({
@@ -212,20 +211,20 @@ export async function main() {
         },
       }),
     ]);
+    const hotelAvailability = [];
     for (const month of months) {
       for (const date of month.coverageDates) {
         for (const [hotelIndex, hotel] of hotels.entries()) {
-          await prisma.hotelAvailability.create({
-            data: {
-              hotelId: hotel.id,
-              date,
-              pricePerNight: (hotelIndex === 0 ? 35 : 70) + (date.getUTCDate() % 4),
-              roomsAvailable: hotelIndex === 0 ? 4 : 3,
-            },
+          hotelAvailability.push({
+            hotelId: hotel.id,
+            date,
+            pricePerNight: (hotelIndex === 0 ? 35 : 70) + (date.getUTCDate() % 4),
+            roomsAvailable: hotelIndex === 0 ? 4 : 3,
           });
         }
       }
     }
+    await prisma.hotelAvailability.createMany({ data: hotelAvailability });
 
     for (const activityDefinition of activityTemplates) {
       const activity = await prisma.activity.create({
@@ -239,21 +238,21 @@ export async function main() {
           target: activityDefinition.target,
         },
       });
+      const activityAvailability = [];
       for (const month of months) {
         for (const date of month.coverageDates) {
-          await prisma.activityAvailability.create({
-            data: {
-              activityId: activity.id,
-              date,
-              startMinute: activityDefinition.startMinute,
-              endMinute: activityDefinition.endMinute,
-              cost: activityDefinition.cost,
-              capacity: 15,
-              booked: 0,
-            },
+          activityAvailability.push({
+            activityId: activity.id,
+            date,
+            startMinute: activityDefinition.startMinute,
+            endMinute: activityDefinition.endMinute,
+            cost: activityDefinition.cost,
+            capacity: 15,
+            booked: 0,
           });
         }
       }
+      await prisma.activityAvailability.createMany({ data: activityAvailability });
     }
 
     console.log(`Catalogata destinazione ${destinationIndex + 1}/${destinations.length}: ${definition.city} (${definition.countryCode})`);
