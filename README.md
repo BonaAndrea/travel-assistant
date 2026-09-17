@@ -270,7 +270,7 @@ billing dell'organizzazione. Il backend usa il modello configurabile `GROQ_VISIO
 Groq resta il provider primario. In caso di rate limit o indisponibilità transitoria è possibile
 abilitare il fallback REST Gemini senza modificare le API applicative: impostare `GEMINI_ENABLED=true`,
 `GEMINI_API_KEY`, `GEMINI_FREE_TIER_CONFIRMED=true` e, per le immagini, anche `GEMINI_VISION_ENABLED=true`.
-Il modello è configurabile con `GEMINI_MODEL` (default `gemini-2.5-flash-lite`). L'adapter traduce
+Il modello è configurabile con `GEMINI_MODEL` (default `gemini-3.5-flash-lite`). L'adapter traduce
 messaggi, immagini inline e `update_requirements` nel formato function calling di Gemini e riconsegna
 il formato interno compatibile con Groq. Se Gemini non è configurato, il comportamento precedente resta
 invariato. Il fallback non può garantire quote, latenza o disponibilità del piano gratuito Google:
