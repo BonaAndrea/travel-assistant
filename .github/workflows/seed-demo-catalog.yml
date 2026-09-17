@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   seed:
-    if: ${{ inputs.confirmation == 'RIGENERA-CATALOGO' }}
+    if: ${{ !cancelled() && inputs.confirmation == 'RIGENERA-CATALOGO' }}
     runs-on: ubuntu-latest
     defaults:
       run:
