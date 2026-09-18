@@ -265,14 +265,19 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
         ).fetchall()
         history = [{"role": row[0], "content": row[1]} for row in reversed(history_rows)]
         image_rows = connection.execute(
-            'SELECT "description", "tags" FROM "PreferenceImage" '
-            'WHERE "conversationId" = %s AND "userId" = %s AND "analysisStatus" = \'completed\' '
+            'SELECT "storageKey", "mimeType", "description", "tags" FROM "PreferenceImage" '
+            'WHERE "conversationId" = %s AND "userId" = %s '
             'ORDER BY "createdAt" DESC LIMIT 5',
             (conversation_id, user_id),
         ).fetchall()
         image_context_parts = []
-        for description, tags in image_rows:
-            image_context_parts.extend([str(description or ""), *[str(tag) for tag in (tags or [])]])
+        image_attachments = []
+        for storage_key, mime_type, description, tags in image_rows:
+            if description or tags:
+                image_context_parts.extend([str(description or ""), *[str(tag) for tag in (tags or [])]])
+            image_path = Path(get_settings().preference_image_dir) / storage_key
+            if image_path.is_file():
+                image_attachments.append({"data": image_path.read_bytes(), "mimeType": mime_type})
         image_context = " ".join(image_context_parts)
         if state.get("phase") == "confirming" and _rejection(message):
             updated_requirements = _apply_catalog_locations(
@@ -335,9 +340,7 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
                 )
                 connection.commit()
                 return response
-            llm_fields, llm_reply = await enrich_requirements(
-                history, requirements,
-            )
+            llm_fields, llm_reply = await enrich_requirements(history, requirements, image_attachments)
             # Deterministic values win over model suggestions when the user
             # explicitly supplied them in this turn.
             requirements = _merge_advisory_requirements(message, requirements, llm_fields)
