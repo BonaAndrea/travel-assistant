@@ -252,12 +252,34 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             image_context_parts.extend([str(description or ""), *[str(tag) for tag in (tags or [])]])
         image_context = " ".join(image_context_parts)
         if state.get("phase") == "confirming" and _rejection(message):
-            state["phase"] = "collecting"
-            response = {
-                "reply": "Va bene, cosa vuoi modificare: destinazione, budget, date, durata, partecipanti o preferenze?",
-                "phase": state["phase"], "requirements": requirements,
-                "missing": missing_fields(requirements), "issues": validate_consistency(requirements),
-            }
+            updated_requirements = _apply_catalog_locations(
+                connection, message, _extract_requirements(message, requirements)
+            )
+            if updated_requirements != requirements:
+                requirements = updated_requirements
+                state["requirements"] = requirements
+                missing = missing_fields(requirements)
+                issues = validate_consistency(requirements)
+                state["phase"] = "collecting"
+                if issues:
+                    reply = " ".join(issues)
+                elif missing:
+                    labels = ", ".join(FIELD_LABELS[field] for field in missing)
+                    reply = f"Mi mancano ancora {labels}. Puoi indicarmeli?"
+                else:
+                    state["phase"] = "confirming"
+                    reply = _summary(requirements)
+                response = {
+                    "reply": reply, "phase": state["phase"], "requirements": requirements,
+                    "missing": missing, "issues": issues,
+                }
+            else:
+                state["phase"] = "collecting"
+                response = {
+                    "reply": "Va bene, cosa vuoi modificare: destinazione, budget, date, durata, partecipanti o preferenze?",
+                    "phase": state["phase"], "requirements": requirements,
+                    "missing": missing_fields(requirements), "issues": validate_consistency(requirements),
+                }
         elif state.get("phase") == "confirming" and _confirmation(message) and is_complete(requirements):
             reply = "Perfetto: i requisiti sono confermati. Avvio la generazione dell’itinerario."
             state["phase"] = "confirmed"
