@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Assistant - Accedi</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=backend-toggle-v5" />
   <style>.auth-forms > h1 { display: none; }</style>
 </head>
 <body class="auth-page-body">
@@ -54,10 +54,31 @@
 
     </section>
   </div>
+  <div class="backend-picker" aria-labelledby="backend-picker-title" aria-describedby="backend-picker-help">
+    <span id="backend-picker-title" class="backend-picker-label">Backend</span>
+    <label class="extras-switch backend-toggle" for="backend-choice-toggle">
+      <span class="backend-toggle-name">Node.js</span>
+      <input id="backend-choice-toggle" type="checkbox" role="switch" aria-describedby="backend-picker-help" />
+      <span class="extras-switch-track" aria-hidden="true"><span></span></span>
+      <span class="backend-toggle-name">Python</span>
+    </label>
+    <span id="backend-picker-help" class="sr-only">Python predefinito</span>
+  </div>
   </main>
 
   <script type="module">
-    import { api } from './api.js';
+    import { api, BACKENDS, getBackendChoice, setBackendChoice } from './api.js?v=dual-backend';
+
+    const backendToggle = document.getElementById('backend-choice-toggle');
+    const backendPickerHelp = document.getElementById('backend-picker-help');
+    backendToggle.checked = getBackendChoice() === 'python';
+    function updateBackendChoice() {
+      const choice = backendToggle.checked ? 'python' : 'node';
+      setBackendChoice(choice);
+      backendPickerHelp.textContent = `${BACKENDS[choice].label}${choice === 'python' ? ' predefinito' : ''}`;
+    }
+    updateBackendChoice();
+    backendToggle.addEventListener('change', updateBackendChoice);
 
     function setPending(form, pending) {
       form.querySelector('button').disabled = pending;

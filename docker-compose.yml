@@ -15,34 +15,35 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
-    build: ./backend
+  backend-python:
+    build:
+      context: .
+      dockerfile: backend-python/Dockerfile
+    env_file:
+      - path: ./backend-python/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - ./backend/.env
     environment:
       DATABASE_URL: postgresql://travel:travel@postgres:5432/travel_assistant?schema=public
-      NODE_ENV: development
-      PORT: 4000
+      ENVIRONMENT: development
+      JWT_SECRET: development-only-change-me
+      PREFERENCE_IMAGE_DIR: /app/uploads/preferences
     ports:
-      - '4000:4000'
+      - '4001:4001'
     volumes:
-      - ./backend:/app
-      - /app/node_modules
-      - preference_uploads:/app/uploads
-    # Dev/demo: applicare le migrazioni versionate prima del primo avvio con
-    # `docker compose run --rm backend npm run prisma:migrate:deploy`.
-    command: ["npm", "start"]
+      - preference_uploads_python:/app/uploads/preferences
 
-  frontend:
-    image: nginx:alpine
+  frontend-python:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.python
+    depends_on:
+      - backend-python
     ports:
-      - '8080:80'
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
+      - '8081:80'
 
 volumes:
   pgdata:
-  preference_uploads:
+  preference_uploads_python:

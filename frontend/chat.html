@@ -925,13 +925,17 @@
         if (job.status === 'completed') {
           const conversation = await api(`/chat/conversations/${conversationId}`);
           if (version !== generationVersion) return;
-          const result = conversation.state?.lastResult;
-          if (!result?.requirementsSnapshot || !requirementsMatch(result.requirementsSnapshot, conversation.state.requirements)
-            || !requirementsMatch(result, job.result)) {
+          // The worker writes the job row before the conversation state. Use
+          // the completed job payload during that short consistency window;
+          // otherwise the UI used to discard a valid result until reload.
+          const result = conversation.state?.lastResult || job.result;
+          const savedRequirements = conversation.state?.requirements || job.result?.requirementsSnapshot || currentRequirements;
+          if (!result?.requirementsSnapshot || !requirementsMatch(result.requirementsSnapshot, savedRequirements)
+            || (conversation.state?.lastResult && !requirementsMatch(result, job.result))) {
             clearGeneration();
             return;
           }
-          currentRequirements = conversation.state.requirements;
+          currentRequirements = savedRequirements;
           renderItinerary(result);
           return;
         }
@@ -1028,9 +1032,9 @@
           ${option.compromises && option.compromises.length ? `<p><strong>Compromessi applicati:</strong> ${option.compromises.map(escapeHtml).join(' ')}</p>` : ''}
           <p><strong>Volo di andata:</strong> ${escapeHtml(option.flights.outbound.originAirport.iataCode)} → ${escapeHtml(option.flights.outbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.outbound.date).toLocaleDateString('it-IT'))}</p>
           <p><strong>Volo di ritorno:</strong> ${escapeHtml(option.flights.inbound.originAirport.iataCode)} → ${escapeHtml(option.flights.inbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.inbound.date).toLocaleDateString('it-IT'))}</p>
-          <p><strong>Hotel:</strong> ${escapeHtml(option.hotel.hotel.name)} (${escapeHtml(option.hotel.nights.length)} notti)</p>
+          <p><strong>Hotel:</strong> ${escapeHtml(option.hotel?.name || 'Hotel selezionato')} (${escapeHtml(option.hotel?.nights?.length || 0)} notti)</p>
               <p><strong>Attività (${option.activities.length}):</strong>${option.activities.length === 0 ? ' Nessuna attività disponibile entro i vincoli di budget/capacità per queste date.' : ''}</p>
-          <ul class="activity-list">${option.activities.map(a => `<li class="activity-item">${mediaMarkup(a.media, 'activity-media')}<span>Giorno ${escapeHtml(a.day)} (${escapeHtml(a.date)}): ${escapeHtml(a.name)} - ${Number(a.cost || 0).toFixed(2)}€</span></li>`).join('')}</ul>
+          <ul class="activity-list">${option.activities.map(a => `<li class="activity-item">${mediaMarkup(a.media, 'activity-media')}<span>Giorno ${escapeHtml(a.day)} (${escapeHtml(new Date(a.date).toLocaleDateString('it-IT'))}): ${escapeHtml(a.name)} - ${Number(a.cost || 0).toFixed(2)}€</span></li>`).join('')}</ul>
           <p><strong>Costo totale: ${option.totalCost.toFixed(2)}€</strong> <small class="cost-breakdown">(voli: ${option.breakdown.flightCost.toFixed(2)}€, hotel: ${option.breakdown.hotelCost.toFixed(2)}€, attività: ${option.breakdown.activityCost.toFixed(2)}€)</small></p>
           <div class="itinerary-actions"><button class="book-btn" data-choice="${choice}">Prenota ${isAlternative ? 'l\'alternativa' : 'questa proposta'}</button><span class="share-actions extra-share-controls" aria-label="Condivisione"><button class="share-copy-btn secondary" type="button" aria-label="Copia link itinerario">Copia</button><button class="share-mock-btn secondary" type="button" data-network="WhatsApp" aria-label="Condividi su WhatsApp">WA</button><button class="share-mock-btn secondary" type="button" data-network="Instagram" aria-label="Condividi su Instagram">IG</button><button class="share-mock-btn secondary" type="button" data-network="X" aria-label="Condividi su X">X</button></span></div>
           <p class="share-status" role="status" aria-live="polite"></p>
@@ -1070,7 +1074,7 @@
 
         btn.addEventListener('click', async () => {
           if (bookingInFlight || bookingAttempt?.confirmed) return;
-          const destination = option.flights?.outbound?.destinationAirport?.iataCode || option.hotel?.hotel?.name || 'selezionata';
+          const destination = option.flights?.outbound?.destinationAirport?.iataCode || option.hotel?.name || 'selezionata';
           const total = Number(option.totalCost || 0).toFixed(2);
           if (!confirm(`Confermi la prenotazione per ${destination}, totale ${total} €? Prima della conferma verificheremo nuovamente prezzo e disponibilità.`)) return;
           bookingInFlight = true;

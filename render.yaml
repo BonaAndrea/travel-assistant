@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: travel-assistant-backend
+    name: travel-assistant-backend-node
     runtime: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile
@@ -19,14 +19,34 @@ services:
         value: production
 
   - type: web
+    name: travel-assistant-backend-python
+    runtime: docker
+    rootDir: .
+    dockerfilePath: ./backend-python/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+
+  - type: web
     name: travel-assistant-frontend
     runtime: static
     rootDir: frontend
     buildCommand: >-
-      test -n "$API_BASE_URL" &&
-      find . -type f -name '*.js' -print0 |
-      xargs -0 -r sed -i "s|http://localhost:4000/api|$API_BASE_URL|g"
+      test -n "$NODE_API_URL" && test -n "$PYTHON_API_URL" &&
+      sed -i "s|__NODE_API_URL__|$NODE_API_URL|g; s|__PYTHON_API_URL__|$PYTHON_API_URL|g" api.js
     staticPublishPath: .
     envVars:
-      - key: API_BASE_URL
+      - key: NODE_API_URL
+        sync: false
+      - key: PYTHON_API_URL
         sync: false

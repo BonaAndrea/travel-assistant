@@ -122,6 +122,49 @@ test('persists a catalog city mentioned by the user even when the LLM returns on
   expect(conversation.state.requirements.destinationCity).toBe('Barcellona');
 });
 
+test('does not let the LLM replace an explicit country with an unmentioned city', async () => {
+  conversation.state = { phase: 'collecting', requirements: {} };
+  db.destination.findMany.mockResolvedValue([
+    { country: 'Spagna', countryCode: 'ES', city: 'Barcellona', airports: [] },
+    { country: 'Spagna', countryCode: 'ES', city: 'Madrid', airports: [] },
+    { country: 'Francia', countryCode: 'FR', city: 'Nizza', airports: [] },
+  ]);
+  chatTurn.mockResolvedValue({
+    assistantMessage: 'Ho raccolto i dati del viaggio.',
+    updatedFields: { country: 'Spagna', destinationCity: 'Nizza' },
+  });
+
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'Vorrei organizzare un viaggio in Spagna.' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.requirements.country).toBe('Spagna');
+  expect(response.body.requirements.destinationCity).toBeUndefined();
+  expect(conversation.state.requirements.destinationCity).toBeUndefined();
+});
+
+test('a country correction explicitly replaces the previous destination city', async () => {
+  conversation.state = {
+    phase: 'collecting',
+    requirements: { country: 'Francia', destinationCity: 'Nizza' },
+  };
+  db.destination.findMany.mockResolvedValue([
+    { country: 'Spagna', countryCode: 'ES', city: 'Barcellona', airports: [] },
+    { country: 'Francia', countryCode: 'FR', city: 'Nizza', airports: [] },
+  ]);
+  chatTurn.mockResolvedValue({
+    assistantMessage: 'Aggiorno la destinazione.',
+    updatedFields: { country: 'Francia', destinationCity: 'Nizza' },
+  });
+
+  const response = await request(app).post('/chat/conversations/conversation-1/messages')
+    .send({ message: 'No, la destinazione deve essere Spagna.' });
+
+  expect(response.status).toBe(200);
+  expect(response.body.requirements.country).toBe('Spagna');
+  expect(response.body.requirements.destinationCity).toBeUndefined();
+});
+
 test('normalizes an airport mentioned in Italian before itinerary generation', async () => {
   conversation.state = { phase: 'collecting', requirements: {} };
   db.destination.findMany.mockResolvedValue([{

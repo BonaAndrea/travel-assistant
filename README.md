@@ -1,115 +1,61 @@
-# Travel Assistant — Assistente Virtuale per Viaggi Personalizzati
+# Travel Assistant
 
-Travel Assistant è un assistente conversazionale per raccogliere i requisiti di viaggio,
-proporre itinerari personalizzati e accompagnare l'utente fino alla prenotazione.
-La conversazione è multi-turno: l'utente può completare o modificare le proprie preferenze,
-confermare la proposta e prenotare voli, hotel e attività all'interno dello stesso percorso.
+Assistente conversazionale per creare e prenotare itinerari personalizzati.
+Il backend operativo del branch `codex-backend-python` è esclusivamente Python
+con FastAPI e PostgreSQL; il frontend è HTML/CSS/JavaScript vanilla servito da
+Nginx.
 
-Il progetto è stato realizzato come coding challenge, con un catalogo locale seedato e
-un'architettura pensata per rendere espliciti i principali aspetti applicativi: validazione,
-RAG, autenticazione, concorrenza, transazioni e gestione degli errori.
+## Avvio con Docker
 
-## Stack scelto
+Prerequisiti: Docker Desktop avviato.
 
-- **Backend**: Node.js + Express + Prisma ORM
-- **DB relazionale**: PostgreSQL (stato transazionale: utenti, disponibilità, prenotazioni)
-- **DB vettoriale (RAG)**: indice file-based con embeddings calcolati localmente
-  (`@xenova/transformers`, modello `all-MiniLM-L6-v2`) — nessuna API key richiesta per questa parte
-- **LLM conversazionale**: [Groq](https://console.groq.com) (gratuito, API compatibile OpenAI,
-  usato con tool-calling per l'estrazione strutturata dei requisiti)
-- **Frontend**: HTML/CSS/JS vanilla (nessun framework, come suggerito dalla challenge)
-- **Immagini**: file selezionati da Wikimedia Commons, con autore e licenza riportati
-  accanto a ogni immagine; il catalogo usa URL pubblici e non richiede API key
-- **Test**: Jest, sulle logiche di business pure (validazione requisiti, calcolo date)
-
-## Perché queste scelte
-
-- **Vector store separato dal DB relazionale ma senza servizio esterno**: per rispettare il
-  vincolo "soluzione semplice, purché il ruolo sia distinguibile", ho evitato di introdurre
-  un servizio aggiuntivo (Chroma/Pinecone) e ho usato un indice JSON con similarità coseno
-  calcolata in-process. Il ruolo (retrieval semantico su descrizioni/target di attività e hotel)
-  è chiaramente separato dalla logica transazionale di Postgres.
-- **Groq per la conversazione**: gratuito, veloce, supporta tool-calling nativo utile per
-  l'estrazione strutturata dei requisiti senza dover fare parsing manuale fragile.
-- **Un'unica tabella `Conversation.state` (JSON) per lo stato della macchina a stati** invece di
-  colonne rigide: la conversazione ha fasi (`collecting → confirming → itinerary_proposed →
-  booking_confirmed`) e requisiti parziali che cambiano forma nel tempo; JSON è più pragmatico
-  qui, con lo svantaggio di perdere un po' di type-safety a livello DB.
-- **Booking transazionale con update condizionali**: la conferma prenotazione decrementa
-  posti/camere/capacità dentro un'unica transazione Prisma, con `updateMany` condizionati sulla
-  disponibilità residua. Se un solo componente non è più disponibile, l'intera transazione va in
-  rollback e viene creato un booking con stato `failed` — l'utente non vede mai un itinerario
-  "confermato" ma in realtà parzialmente prenotato.
-- **Idempotenza**: `idempotencyKey` univoca sul booking, generata lato client (UUID) al momento
-  del click "Prenota". Un invio ripetuto della stessa richiesta ritorna la prenotazione già
-  creata invece di crearne una seconda.
-
-- **Overlap e prezzo al commit**: la conferma acquisisce un advisory lock PostgreSQL
-  transazionale, ricontrolla le date contro le prenotazioni confermate e rilegge i prezzi
-  correnti di voli, hotel e attività. Un cambio prezzo restituisce `PRICE_CHANGED` e annulla
-  l'intera transazione.
-
-## Setup
-
-### Opzione A — Docker (consigliata)
-
-```bash
-cp backend/.env.example backend/.env
-# modifica backend/.env inserendo GROQ_API_KEY (gratuita su console.groq.com)
-
-export GROQ_API_KEY=xxxxx
-docker compose up --build
+```powershell
+docker compose up -d --build
 ```
 
-Al primo avvio, in un altro terminale:
+Aprire <http://localhost:8081>.
 
-```bash
-docker compose exec backend npm run prisma:migrate:deploy
-docker compose exec backend npm run seed
+Endpoint principali:
+
+- API: <http://localhost:4001>
+- health: <http://localhost:4001/health>
+- readiness: <http://localhost:4001/health/ready>
+- documentazione OpenAPI: <http://localhost:4001/docs>
+
+Il database viene migrato all’avvio. Per ricreare il catalogo demo in modo
+distruttivo, dopo aver verificato di usare un database dedicato:
+
+```powershell
+docker compose exec backend-python python -m scripts.seed
 ```
 
-Il container backend è configurato per dev/demo: non modifica automaticamente lo schema
-all’avvio e gira con l’utente non-root `node`. Eseguire `prisma migrate deploy` esplicitamente solo
-sul database demo dopo aver verificato `DATABASE_URL`; in produzione usare migrazioni versionate
-e un processo di deploy controllato.
+Il seed Python ricrea destinazioni, aeroporti, voli, hotel, disponibilità,
+attività e indice RAG. Non elimina utenti e token di autenticazione.
 
-Poi apri http://localhost:8080 nel browser (il frontend viene servito da un piccolo web server incluso in Docker — necessario perché i moduli JavaScript non funzionano se apri il file HTML direttamente col doppio click).
+## Avvio locale
 
-### Opzione B — locale senza Docker
-
-Richiede PostgreSQL già installato e in esecuzione.
-
-```bash
-cd backend
-cp .env.example .env   # imposta DATABASE_URL, GROQ_API_KEY
-npm install
-npm run prisma:migrate:deploy # applica le migrazioni versionate
-npm run seed
-npm run dev
+```powershell
+cd backend-python
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+uvicorn app.main:app --reload --port 4001
 ```
 
-Poi apri `frontend/index.html` nel browser (senza Docker, serve un server statico locale, es. `npx serve frontend`, perché i moduli JS non funzionano da file:// — vedi nota sopra).
+È necessario un PostgreSQL raggiungibile tramite `DATABASE_URL`.
 
-### Seed demo: comando, impatto e precondizioni
+## Test
 
-Il seed è destinato a un database demo isolato. Prima di eseguirlo verificare che PostgreSQL
-sia raggiungibile, che `DATABASE_URL` punti al database corretto e che lo schema sia aggiornato:
-
-```bash
-cd backend
-npm run prisma:migrate:deploy
-npm run prisma:generate
-npm run seed
+```powershell
+cd backend-python
+.\.venv\Scripts\python.exe -m pytest tests -q
 ```
 
-`npm run seed` è distruttivo per i dati applicativi del database indicato: elimina messaggi,
-booking, itinerari, job, conversazioni e il catalogo voli/hotel/attività con le disponibilità,
-poi ricrea il catalogo deterministico multi-città e l'indice RAG. Non eseguirlo su un database
-con dati utente senza backup e approvazione esplicita. Dopo il seed va riavviato il backend per
-svuotare eventuali cache locali e va verificato che lo storage immagini punti alla directory
-prevista. Nel checkout condiviso il comando non è stato eseguito.
+La suite copre parsing e validazione requisiti, health/readiness, RAG locale,
+risoluzione catalogo, vision opt-in e fallback Gemini.
 
-### Seed remoto senza Shell Render
+## Architettura
 
 Il workflow GitHub Actions **Rigenera catalogo demo** è avviabile solo manualmente e non parte
 con il deploy. Per usarlo sul database Neon, aggiungere il secret repository
@@ -120,22 +66,35 @@ avvertenze distruttive riportate sopra. Al termine, avvia un deploy del backend 
 `feature/railway-demo`: se l'indice RAG file non è disponibile nel filesystem effimero del servizio,
 la selezione attività usa direttamente il catalogo relazionale senza caricare il modello di embedding
 nell'istanza gratuita.
+- PostgreSQL è la fonte autorevole per utenti, catalogo, disponibilità,
+  conversazioni, itinerari e prenotazioni.
+- `backend-python/data/vector-index.json` è un indice locale separato per il
+  retrieval di descrizioni, categorie e target di attività/hotel. Non viene
+  usato per decidere disponibilità o prezzi.
+- Groq è il provider conversazionale opzionale; Gemini è un fallback opzionale.
+  Parser deterministico, validazione e vincoli transazionali restano autorevoli.
+- Le prenotazioni usano transazioni PostgreSQL, lock advisory, controlli
+  condizionati di disponibilità, verifica prezzo e idempotenza.
+- I job di generazione sono asincroni e vengono ripresi dopo il riavvio.
+- Le immagini sono private, validate per magic bytes e analizzate solo se i
+  flag e le credenziali vision sono esplicitamente abilitati.
 
-### Demo rapida
+## Configurazione provider
 
-1. Avvia il progetto e crea un account.
-2. Apri **Chat** e inserisci una richiesta completa, ad esempio:
+Copiare `backend-python/.env.example` in `.env` e configurare solo ciò che
+serve. Senza chiavi LLM il sistema continua a funzionare con estrazione e
+risposte deterministiche. `METRICS_TOKEN`, se impostato, protegge
+`GET /api/metrics`.
 
-   > Vorrei andare in Spagna a [mese disponibile], budget 1500€ per 2 persone,
-   > 5 giorni, partenza da FCO, con preferenza per cultura e relax.
+## Stato del branch
 
-3. Conferma i requisiti riepilogati dall’assistente.
-4. Attendi la generazione dell’itinerario e confronta proposta e alternativa.
-5. Prenota una delle opzioni e verifica il risultato nella sezione **Le mie prenotazioni**.
-6. Usa **Storico** per riprendere una conversazione precedente.
+Il compose principale avvia esclusivamente `backend-python` e
+`frontend-python`. Il branch non usa un proxy intermedio per le API.
 
-**Percorso demo showcase**: utilizza gli stessi flussi autenticati dell’applicazione; non esistono bypass
-o dati demo impliciti nel frontend.
+## Percorso demo showcase
+
+Il branch `codex/demo-dual-backend` aggiunge un frontend unico con scelta tra
+backend Node.js e Python prima del login. La demo usa un Browser interattivo reale end-to-end; non esistono bypass per autenticazione o prenotazione.
 
 ### Matrice browser/viewport verificata
 
@@ -393,3 +352,5 @@ ai giorni 1, 4, 8, 11, 15, 18, 22 e 25, con ritorno a +5 notti; hotel e attivit�
 le relative date.
 L'API distingue aeroporto non riconosciuto, destinazione non catalogata, mese senza partenze e
 ritorno incompatibile, proponendo date o mesi alternativi solo quando sono presenti nel catalogo.
+La verifica manuale copre desktop e mobile, inclusi login, chat, generazione,
+upload immagini, selezione backend e gestione degli errori.

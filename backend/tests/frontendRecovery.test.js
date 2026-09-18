@@ -75,13 +75,13 @@ test('changed requirements discard persisted obsolete job before polling', async
   expect(page.storage.has('activeItineraryGenerationJob')).toBe(false);
 });
 
-test('completed stale result is hidden when conversation invalidates proposal', async () => {
+test('completed job result is shown while conversation state catches up', async () => {
   const api = jest.fn(async path => path.startsWith('/chat/')
     ? { ...conversation, state: { requirements } }
     : { job: { id: 'old-job', conversationId, status: 'completed', result } });
   const page = mount(api, { id: 'old-job', conversationId });
   await page.init();
-  expect(page.renders).toEqual([null]);
+  expect(page.renders).toEqual([result, result]);
 });
 
 test('conversation restore failure retries without creating another conversation', async () => {
