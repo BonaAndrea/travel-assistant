@@ -1,5 +1,73 @@
-<!doctype html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Itinerario condiviso</title><link rel="stylesheet" href="style.css"></head><body><main><p class="page-kicker">Travel Assistant</p><h1>Itinerario condiviso</h1><section id="share-result" class="card" aria-live="polite">Caricamento…</section></main><script type="module">
-const target=document.getElementById('share-result'); const token=new URLSearchParams(location.search).get('token');
-const esc=(v)=>String(v??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-try { if(!token) throw Error('Link non valido'); const response=await fetch(`http://localhost:4000/api/share/public/${encodeURIComponent(token)}`); if(!response.ok) throw Error('Link non disponibile'); const data=await response.json(); const d=data.details||{}; const out=d.flights?.outbound, inn=d.flights?.inbound, activities=Array.isArray(d.activities)?d.activities:[]; target.innerHTML=`<div class="share-toolbar"><button id="share-print" class="secondary">Esporta PDF</button><button id="share-calendar" class="secondary">Aggiungi al calendario</button></div><h2>${esc(out?.destinationAirport?.city||'Viaggio personalizzato')}</h2><p><strong>Voli:</strong> ${esc(out?.originAirport?.iataCode||'?')} → ${esc(out?.destinationAirport?.iataCode||'?')} · ${out?.date?new Date(out.date).toLocaleDateString('it-IT'):''}${inn?.date?` → ${new Date(inn.date).toLocaleDateString('it-IT')}`:''}</p><p><strong>Costo totale:</strong> ${Number(data.totalCost||0).toFixed(2)}€</p>${activities.length?`<section class="group-vote"><h3>Scegli le attività preferite</h3><p>Ogni partecipante può votare dal proprio dispositivo. Un like per attività.</p><ul>${activities.map((a,i)=>`<li><span>${esc(a.name)}</span><button class="vote-button secondary" data-vote="${i}" type="button">👍 <span>0</span></button></li>`).join('')}</ul><p id="vote-status" role="status" aria-live="polite"></p></section>`:''}`; document.getElementById('share-print')?.addEventListener('click',()=>window.print()); document.getElementById('share-calendar')?.addEventListener('click',()=>{const start=out?.date?new Date(out.date):new Date();const end=inn?.date?new Date(inn.date):new Date(start.getTime()+86400000);const fmt=(x)=>x.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');const ics=`BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${fmt(start)}\nDTEND:${fmt(end)}\nSUMMARY:Viaggio a ${out?.destinationAirport?.city||'destinazione'}\nDESCRIPTION:Itinerario condiviso\nEND:VEVENT\nEND:VCALENDAR`;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([ics],{type:'text/calendar'}));a.download='itinerario.ics';a.click();URL.revokeObjectURL(a.href);}); document.querySelectorAll('.vote-button').forEach((button)=>{const key=`travelVote:${token}:${button.dataset.vote}`;const count=Number(localStorage.getItem(key)||0);button.querySelector('span').textContent=count;button.disabled=count>0;if(count>0)button.title='Hai già messo like a questa attività';button.addEventListener('click',()=>{if(localStorage.getItem(key))return;localStorage.setItem(key,'1');button.querySelector('span').textContent='1';button.disabled=true;button.title='Hai già messo like a questa attività';document.getElementById('vote-status').textContent='Like registrato su questo dispositivo.';});}); } catch(error) { target.innerHTML=`<p class="error">${esc(error.message)}</p><p>Chiedi al proprietario un nuovo link.</p>`; }
-</script></body></html>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Itinerario condiviso</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <p class="page-kicker">Travel Assistant</p>
+    <h1>Itinerario condiviso</h1>
+    <section id="share-result" class="card" aria-live="polite">Caricamento…</section>
+  </main>
+  <script type="module">
+    const target = document.getElementById('share-result');
+    const token = new URLSearchParams(location.search).get('token');
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+    try {
+      if (!token) throw Error('Link non valido');
+      const response = await fetch(`/api/share/public/${encodeURIComponent(token)}`);
+      if (!response.ok) throw Error('Link non disponibile');
+      const data = await response.json();
+      const details = data.details || {};
+      const outbound = details.flights?.outbound;
+      const inbound = details.flights?.inbound;
+      const activities = Array.isArray(details.activities) ? details.activities : [];
+      target.innerHTML = `
+        <div class="share-toolbar">
+          <button id="share-print" class="secondary">Esporta PDF</button>
+          <button id="share-calendar" class="secondary">Aggiungi al calendario</button>
+        </div>
+        <h2>${esc(outbound?.destinationAirport?.city || 'Viaggio personalizzato')}</h2>
+        <p><strong>Voli:</strong> ${esc(outbound?.originAirport?.iataCode || '?')} →
+          ${esc(outbound?.destinationAirport?.iataCode || '?')} ·
+          ${outbound?.date ? new Date(outbound.date).toLocaleDateString('it-IT') : ''}
+          ${inbound?.date ? ` → ${new Date(inbound.date).toLocaleDateString('it-IT')}` : ''}</p>
+        <p><strong>Costo totale:</strong> ${Number(data.totalCost || 0).toFixed(2)}€</p>
+        ${activities.length ? `<section class="group-vote"><h3>Scegli le attività preferite</h3>
+          <p>Ogni partecipante può votare dal proprio dispositivo. Un like per attività.</p>
+          <ul>${activities.map((activity, index) => `<li><span>${esc(activity.name)}</span>
+            <button class="vote-button secondary" data-vote="${index}" type="button">👍 <span>0</span></button></li>`).join('')}</ul>
+          <p id="vote-status" role="status" aria-live="polite"></p></section>` : ''}`;
+      document.getElementById('share-print')?.addEventListener('click', () => window.print());
+      document.getElementById('share-calendar')?.addEventListener('click', () => {
+        const start = outbound?.date ? new Date(outbound.date) : new Date();
+        const end = inbound?.date ? new Date(inbound.date) : new Date(start.getTime() + 86400000);
+        const format = (date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+        const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${format(start)}\nDTEND:${format(end)}\nSUMMARY:Viaggio a ${outbound?.destinationAirport?.city || 'destinazione'}\nDESCRIPTION:Itinerario condiviso\nEND:VEVENT\nEND:VCALENDAR`;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+        link.download = 'itinerario.ics'; link.click(); URL.revokeObjectURL(link.href);
+      });
+      document.querySelectorAll('.vote-button').forEach((button) => {
+        const key = `travelVote:${token}:${button.dataset.vote}`;
+        const count = Number(localStorage.getItem(key) || 0);
+        button.querySelector('span').textContent = count;
+        button.disabled = count > 0;
+        if (count > 0) button.title = 'Hai già messo like a questa attività';
+        button.addEventListener('click', () => {
+          if (localStorage.getItem(key)) return;
+          localStorage.setItem(key, '1'); button.querySelector('span').textContent = '1';
+          button.disabled = true; document.getElementById('vote-status').textContent = 'Like registrato su questo dispositivo.';
+        });
+      });
+    } catch (error) {
+      target.innerHTML = `<p class="error">${esc(error.message)}</p><p>Chiedi al proprietario un nuovo link.</p>`;
+    }
+  </script>
+</body>
+</html>

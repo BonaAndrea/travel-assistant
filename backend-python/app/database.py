@@ -7,7 +7,7 @@ from .config import get_settings
 
 
 def psycopg_url(database_url: str) -> str:
-    """Remove Prisma-only query options before handing the URL to psycopg."""
+    """Remove ORM-specific query options before handing the URL to psycopg."""
     parsed = urlsplit(database_url)
     query = [(key, value) for key, value in parse_qsl(parsed.query) if key != "schema"]
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))

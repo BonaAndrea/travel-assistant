@@ -1,33 +1,45 @@
-# Architettura e threat model
+# Architettura
 
-## Confini
+## Runtime
 
-Il backend Express espone API REST sotto `/api`; PostgreSQL è la fonte autorevole per stato,
-disponibilità e booking. Il retrieval RAG è un indice JSON locale alimentato da embeddings
-locali: non sostituisce il database relazionale e non decide la disponibilità finale.
-Groq gestisce solo la conversazione/estrazione requisiti; il server valida e persiste ogni stato.
+Il compose principale avvia tre servizi:
 
-## Consistenza
+- `backend-python`: FastAPI/Uvicorn sulla porta `4001`;
+- `frontend-python`: Nginx sulla porta `8081`;
+- `postgres`: PostgreSQL 16.
 
-La conferma booking usa una transazione Prisma e decrementi condizionati su voli, camere e slot.
-La chiave idempotente è unica. I turni chat acquisiscono un advisory lock PostgreSQL su una
-connessione dedicata per tutta la richiesta, inclusa la chiamata LLM; timeout e rilascio sono
-gestiti dal middleware. Rate limit, cache e metriche restano process-local e richiedono adapter
-condivisi in un deployment multi-replica.
+Non esiste un proxy applicativo: il frontend chiama direttamente le API
+Python sotto `/api`.
 
-## Threat model sintetico
+## Confini dati
 
-- Auth: password bcrypt, access JWT breve, refresh token opaco hashato/ruotato; ownership per
-  risorsa, rate limit auth, claim JWT `typ/sub` e cookie HttpOnly.
-- Input: Zod e limiti body/file; upload con MIME e magic bytes, storage fuori dalla directory
-  statica. In produzione servono anche WAF e limiti al reverse proxy.
-- Secret/log: chiavi via env/secret manager, mai nel repository; logger whitelistato e redazione
-  dei prompt provider. I valori demo non sono adatti alla produzione.
-- Booking: transazioni, lock condizionali e idempotenza mitigano doppie conferme/overselling.
-- Health: readiness verifica PostgreSQL; liveness non dipende dal DB; shutdown chiude HTTP,
-  Prisma e pool advisory.
+PostgreSQL è autorevole per stato transazionale, catalogo, disponibilità,
+conversazioni, itinerari e prenotazioni. L’indice RAG in
+`backend-python/data/vector-index.json` contiene solo descrizioni e metadati
+testuali per ranking/motivazione; non può confermare disponibilità o prezzi.
 
-## Fuori scope
+## Flusso principale
 
-Non sono inclusi provider di booking reale, coda esterna, secret manager, tracing distribuito,
-WAF o replica PostgreSQL: aggiungerli prima di un esercizio production reale.
+1. L’utente si autentica con access token JWT e refresh token HttpOnly.
+2. La chat persiste messaggi e snapshot dei requisiti; un advisory lock evita
+   aggiornamenti concorrenti sulla stessa conversazione.
+3. La conferma esplicita crea un job idempotente asincrono.
+4. Il generatore seleziona voli, camere e attività coerenti con date, budget,
+   disponibilità e preferenze; può produrre un’alternativa con compromessi.
+5. Il salvataggio crea uno snapshot immutabile dell’opzione scelta.
+6. La prenotazione verifica nuovamente prezzi/disponibilità e usa transazione,
+   lock advisory e aggiornamenti condizionati.
+
+## Resilienza
+
+- job `queued/running` ripresi al riavvio;
+- retry/backoff e circuit breaker per Groq;
+- fallback Gemini opzionale;
+- vision opt-in con fallback metadata-only;
+- health, readiness, request-id e metrics protette da token.
+
+## Migrazioni e seed
+
+Le migrazioni versionate sono sotto `backend-python/migrations`. Il comando
+`python scripts/seed.py` ricrea il catalogo demo e l’indice RAG senza dipendere
+da runtime o tool JavaScript.

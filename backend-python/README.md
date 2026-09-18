@@ -1,47 +1,30 @@
-# Python backend
+# Backend Python
 
-Questo è il backend operativo del progetto. Il vecchio codice Express sotto
-`backend/` resta nel repository solo come riferimento durante la migrazione e
-non viene più avviato dal compose principale.
+Backend operativo del progetto, implementato con FastAPI, psycopg e PostgreSQL.
+Il servizio espone API REST, OpenAPI, autenticazione, chat conversazionale,
+generazione asincrona degli itinerari, booking, condivisione e upload privati.
 
 ## Avvio locale
 
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\\.venv\\Scripts\\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 4001
 ```
 
-Endpoint iniziali:
+Endpoint principali: `/health`, `/health/live`, `/health/ready`, `/docs` e le
+API protette sotto `/api`. Il frontend statico usa la porta 8081 e le API sulla
+porta 4001.
 
-- `GET /health` — health compatibile con il backend attuale
-- `GET /health/live` — liveness, non richiede il database
-- `GET /health/ready` — readiness con probe PostgreSQL
-- `GET /api/health` e `GET /api/ready` — alias temporanei per la migrazione
-- `GET /docs` — documentazione OpenAPI generata da FastAPI
-
-Autenticazione disponibile sotto `/api/auth`: `register`, `login`, `refresh` e
-`logout`. Il contratto usa la stessa risposta `{ error: ... }` e lo stesso
-cookie `refresh_token` del backend Express.
-
-Sono disponibili anche i primi endpoint protetti dello storico chat:
-`GET/DELETE /api/chat/conversations`, `GET /api/chat/conversations/:id` e la
-creazione transitoria `POST /api/chat/conversations`.
-
-La chat, i job di generazione, itinerari, booking, share link e immagini sono
-gestiti nativamente da Python. La generazione interroga
-il catalogo PostgreSQL per voli, camere e attività, salva uno snapshot immutabile
-dei requisiti e aggiorna il job in background.
-
-Per il percorso completo Python:
+## Catalogo demo
 
 ```powershell
-docker compose up -d --build
+python -m scripts.seed
 ```
 
-Il frontend Python è disponibile su `http://localhost:8081` e usa
-direttamente le API Python sulla porta `4001`.
+Il seed ricrea solo il catalogo demo e i relativi dati di disponibilità; non
+cancella utenti, conversazioni, itinerari o prenotazioni.
 
 ## Test
 

@@ -1,6 +1,0 @@
-node_modules
-coverage
-uploads
-.env
-src/db/vector-index.json
-*.log

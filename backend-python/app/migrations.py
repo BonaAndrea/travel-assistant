@@ -4,16 +4,16 @@ from .database import connect
 
 
 def apply_migrations() -> None:
-    migrations_dir = Path(__file__).resolve().parents[1] / "prisma-migrations"
+    migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
     if not migrations_dir.is_dir():
         return
     with connect() as connection:
-        prisma_migrations = connection.execute(
+        legacy_migrations = connection.execute(
             "SELECT to_regclass('public._prisma_migrations')"
         ).fetchone()[0]
-        # Existing installations are already managed by the versioned Prisma
-        # migrations from the legacy service; never replay those CREATE TABLEs.
-        if prisma_migrations:
+        # Existing installations already contain the relational schema; never
+        # replay CREATE TABLE statements on those databases.
+        if legacy_migrations:
             return
         connection.execute(
             'CREATE TABLE IF NOT EXISTS "PythonMigration" ("name" TEXT PRIMARY KEY, "appliedAt" TIMESTAMP NOT NULL DEFAULT NOW())'

@@ -5,22 +5,17 @@ on:
   pull_request:
 
 jobs:
-  backend:
+  python:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - run: npm test -- --runInBand
-      - name: Dependency audit (known transitive RAG advisories are non-blocking)
-        run: npm audit --omit=dev || true
-      - run: npm run test:integration
-      - run: docker compose -f ../docker-compose.yml config --quiet
-      - run: docker compose -f ../docker-compose.yml build backend
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend-python/requirements.txt
+      - run: python -m pip install -r backend-python/requirements.txt
+      - run: python -m pytest backend-python/tests -q
+      - run: python -m compileall -q backend-python/app backend-python/scripts
+      - run: docker compose config --quiet
+      - run: docker compose build backend-python frontend-python

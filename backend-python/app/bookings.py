@@ -136,7 +136,7 @@ def confirm_booking(payload: BookingRequest, user_id: UserId, response: Response
             return {"booking": _booking_json(booking), "alreadyProcessed": False}
     except HTTPException as error:
         # The reservation transaction is rolled back. Keep a separate failed
-        # record for auditability and idempotent replay, matching the Node
+        # record for auditability and idempotent replay
         # lifecycle contract without exposing a partial success.
         with connect() as failure_connection:
             existing = failure_connection.execute(

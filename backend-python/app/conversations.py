@@ -125,7 +125,7 @@ def _apply_catalog_locations(connection: object, text: str, requirements: dict) 
 
 @router.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(_user_id: UserId) -> dict[str, str]:
-    # La creazione è transitoria, come nell'implementazione Node: la riga viene
+    # La creazione è transitoria: la riga viene
     # materializzata solo quando arriva il primo messaggio.
     return {"conversationId": str(uuid4())}
 
