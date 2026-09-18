@@ -30,15 +30,6 @@
     <button id="show-register" class="auth-mode-btn" type="button" aria-pressed="false" aria-controls="reg-form">Registrati</button>
   </div>
 
-  <div class="backend-picker card" aria-labelledby="backend-picker-title" aria-describedby="backend-picker-help">
-    <label id="backend-picker-title" for="backend-choice">Backend della demo</label>
-    <select id="backend-choice">
-      <option value="python">Python (predefinito)</option>
-      <option value="node">Node.js</option>
-    </select>
-    <p id="backend-picker-help" class="muted">Python è il percorso predefinito. Puoi passare a Node.js prima di accedere; la scelta resta memorizzata per questa demo.</p>
-  </div>
-
   <form id="login-form" class="card" novalidate aria-labelledby="login-title">
     <h2 id="login-title">Accedi</h2>
     <label for="login-email">Email</label>
@@ -61,21 +52,34 @@
     <p id="reg-error" class="error" role="alert" aria-live="assertive"></p>
   </form>
 
+  <div class="backend-picker" aria-labelledby="backend-picker-title" aria-describedby="backend-picker-help">
+    <span id="backend-picker-title" class="backend-picker-label">Backend demo</span>
+    <label class="backend-toggle" for="backend-choice-toggle">
+      <span class="backend-toggle-name">Python</span>
+      <input id="backend-choice-toggle" type="checkbox" role="switch" aria-describedby="backend-picker-help" />
+      <span class="backend-toggle-track" aria-hidden="true"><span></span></span>
+      <span class="backend-toggle-name">Node.js</span>
+    </label>
+    <span id="backend-picker-help" class="backend-picker-help">Python predefinito</span>
+  </div>
+
     </section>
   </div>
   </main>
 
   <script type="module">
-    import { api, BACKENDS, getBackendChoice, setBackendChoice } from './api.js';
+    import { api, BACKENDS, getBackendChoice, setBackendChoice } from './api.js?v=dual-backend';
 
-    const backendChoice = document.getElementById('backend-choice');
-    backendChoice.value = getBackendChoice();
-    for (const option of backendChoice.options) {
-      option.textContent = option.value === 'python'
-        ? `${BACKENDS[option.value].label} (predefinito)`
-        : BACKENDS[option.value].label;
+    const backendToggle = document.getElementById('backend-choice-toggle');
+    const backendPickerHelp = document.getElementById('backend-picker-help');
+    backendToggle.checked = getBackendChoice() === 'node';
+    function updateBackendChoice() {
+      const choice = backendToggle.checked ? 'node' : 'python';
+      setBackendChoice(choice);
+      backendPickerHelp.textContent = `${BACKENDS[choice].label}${choice === 'python' ? ' predefinito' : ''}`;
     }
-    backendChoice.addEventListener('change', () => setBackendChoice(backendChoice.value));
+    updateBackendChoice();
+    backendToggle.addEventListener('change', updateBackendChoice);
 
     function setPending(form, pending) {
       form.querySelector('button').disabled = pending;
