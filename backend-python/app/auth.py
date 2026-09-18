@@ -98,7 +98,7 @@ def register(payload: Registration, response: Response) -> dict:
             connection.execute(
                 'INSERT INTO "User" ("id", "email", "passwordHash", "name", "createdAt") '
                 "VALUES (%s, %s, %s, %s, %s)",
-                (*user, password_hash, datetime.now(UTC)),
+                (user[0], user[1], password_hash, user[2], datetime.now(UTC)),
             )
             return create_session(response, user, connection)
     except HTTPException:
