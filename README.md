@@ -81,3 +81,13 @@ risposte deterministiche. `METRICS_TOKEN`, se impostato, protegge
 
 Il compose principale avvia esclusivamente `backend-python` e
 `frontend-python`. Il branch non usa un proxy intermedio per le API.
+
+## Percorso demo showcase
+
+Il branch `codex/demo-dual-backend` aggiunge un frontend unico con scelta tra
+backend Node.js e Python prima del login. La demo usa un Browser interattivo reale end-to-end; non esistono bypass per autenticazione o prenotazione.
+
+### Matrice browser/viewport verificata
+
+La verifica manuale copre desktop e mobile, inclusi login, chat, generazione,
+upload immagini, selezione backend e gestione degli errori.

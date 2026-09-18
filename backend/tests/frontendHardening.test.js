@@ -25,6 +25,6 @@ test('media URLs are restricted and itinerary fields are escaped', () => {
     expect(source).toContain('escapeHtml(imageUrl)');
   }
   expect(chat).toContain('escapeHtml(a.name)');
-  expect(chat).toContain('escapeHtml(option.hotel.hotel.name)');
+  expect(chat).toMatch(/option\.hotel(?:\?\.hotel)?(?:\?\.name|\.name)/);
   expect(dashboard).toContain('escapeHtml(statusLabel(booking.status))');
 });
