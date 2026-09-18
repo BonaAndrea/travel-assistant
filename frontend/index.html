@@ -30,13 +30,13 @@
     <button id="show-register" class="auth-mode-btn" type="button" aria-pressed="false" aria-controls="reg-form">Registrati</button>
   </div>
 
-  <div class="backend-picker card" aria-labelledby="backend-picker-title">
+  <div class="backend-picker card" aria-labelledby="backend-picker-title" aria-describedby="backend-picker-help">
     <label id="backend-picker-title" for="backend-choice">Backend della demo</label>
     <select id="backend-choice">
-      <option value="python">Python</option>
+      <option value="python">Python (predefinito)</option>
       <option value="node">Node.js</option>
     </select>
-    <p class="muted">Scegli quale implementazione usare. La scelta viene applicata al login e alle richieste successive.</p>
+    <p id="backend-picker-help" class="muted">Python è il percorso predefinito. Puoi passare a Node.js prima di accedere; la scelta resta memorizzata per questa demo.</p>
   </div>
 
   <form id="login-form" class="card" novalidate aria-labelledby="login-title">
@@ -71,7 +71,9 @@
     const backendChoice = document.getElementById('backend-choice');
     backendChoice.value = getBackendChoice();
     for (const option of backendChoice.options) {
-      option.textContent = BACKENDS[option.value].label;
+      option.textContent = option.value === 'python'
+        ? `${BACKENDS[option.value].label} (predefinito)`
+        : BACKENDS[option.value].label;
     }
     backendChoice.addEventListener('change', () => setBackendChoice(backendChoice.value));
 
