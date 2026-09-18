@@ -41,7 +41,9 @@ def public_user(user: tuple[str, str, str]) -> dict[str, str]:
 
 
 def access_token(user_id: str) -> str:
-    now = datetime.now(UTC)
+    # The legacy schema stores timestamps without timezone information.
+    # Compare using the same representation returned by psycopg.
+    now = datetime.now(UTC).replace(tzinfo=None)
     return jwt.encode(
         {"sub": user_id, "typ": "access", "iat": now, "exp": now + timedelta(minutes=15)},
         get_settings().jwt_secret,
