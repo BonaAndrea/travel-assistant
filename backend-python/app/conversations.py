@@ -154,6 +154,10 @@ def _usable_natural_reply(reply: str | None, requirements: dict, missing: list[s
         phrase in lowered for phrase in ("non riconosco", "non conosco", "non riesco", "manca")
     ):
         return None
+    if requirements.get("country") and any(
+        phrase in lowered for phrase in ("non vedo dettagli", "non vedo informazioni", "non riesco a vedere")
+    ):
+        return None
     if "partecipanti" in missing and re.search(r"\b\d+\s+partecipanti\b", lowered):
         return None
     if "budget" in missing and re.search(r"\b\d+(?:[.,]\d+)?\s*€", lowered):
