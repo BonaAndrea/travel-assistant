@@ -9,7 +9,7 @@ from app.domain.requirements import (
     is_complete,
     normalize_month,
 )
-from app.conversations import _apply_catalog_locations, _extract_requirements
+from app.conversations import _apply_catalog_locations, _extract_requirements, _merge_advisory_requirements
 from app.database import psycopg_url
 from app.vision import analyze_image
 
@@ -65,6 +65,50 @@ def test_complete_requirements_and_budget_validation() -> None:
     }
     assert is_complete(requirements)
     assert not is_complete({**requirements, "budget": 100})
+
+
+def test_separate_month_messages_are_preserved_without_inventing_city() -> None:
+    requirements = _extract_requirements("Vorrei organizzare un viaggio in Spagna", {})
+    requirements = _extract_requirements(
+        "Parto da Roma, budget 1500 euro, siamo in 2 persone e 5 giorni",
+        requirements,
+    )
+    requirements = _extract_requirements(
+        "Cultura, buon cibo e passeggiate, con un hotel centrale",
+        requirements,
+    )
+    requirements = _extract_requirements("Giugno", requirements)
+    merged = _merge_advisory_requirements(
+        "Giugno",
+        requirements,
+        {"destinationCity": "Nizza", "travelMonth": "luglio"},
+    )
+
+    assert merged["country"] == "Spagna"
+    assert "destinationCity" not in merged
+    assert merged["travelMonth"] == "giugno"
+
+
+def test_explicit_city_wins_over_advisory_city() -> None:
+    deterministic = _extract_requirements("Parto da Roma per Barcellona", {})
+    merged = _merge_advisory_requirements(
+        "Parto da Roma per Barcellona",
+        deterministic,
+        {"destinationCity": "Nizza"},
+    )
+    assert merged["destinationCity"] == "Barcellona"
+
+
+def test_country_update_removes_stale_city_and_keeps_food_walks_preferences() -> None:
+    requirements = _extract_requirements("Parto da Roma per Nizza", {})
+    updated = _extract_requirements(
+        "In realtà voglio visitare la Spagna: buon cibo e passeggiate",
+        requirements,
+    )
+    assert updated["country"] == "Spagna"
+    assert "destinationCity" not in updated
+    assert "buon cibo" in updated["activityPreferences"]
+    assert "passeggiate" in updated["activityPreferences"]
 
 
 def test_database_url_drops_prisma_schema_parameter() -> None:

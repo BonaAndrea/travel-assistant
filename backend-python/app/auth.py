@@ -117,7 +117,13 @@ def login(payload: Credentials, response: Response) -> dict:
                 'SELECT "id", "email", "name", "passwordHash" FROM "User" WHERE "email" = %s',
                 (payload.email,),
             ).fetchone()
-            if not user or not bcrypt.checkpw(payload.password.encode(), user[3].encode()):
+            if not user:
+                raise HTTPException(status_code=401, detail="Credenziali non valide")
+            try:
+                password_valid = bcrypt.checkpw(payload.password.encode(), user[3].encode())
+            except (ValueError, TypeError):
+                password_valid = False
+            if not password_valid:
                 raise HTTPException(status_code=401, detail="Credenziali non valide")
             return create_session(response, user[:3], connection)
     except HTTPException:

@@ -38,11 +38,15 @@ AIRPORTS = {
     "mxp": "MXP", "milano malpensa": "MXP", "malpensa": "MXP",
     "blq": "BLQ", "bologna": "BLQ", "nap": "NAP", "napoli": "NAP",
 }
-ACTIVITIES = ("cultura", "sport", "relax", "nightlife", "vita notturna", "natura", "mare", "gastronomia")
+ACTIVITIES = ("cultura", "sport", "relax", "nightlife", "vita notturna", "natura", "mare", "gastronomia", "buon cibo", "passeggiate")
 
 
 def _confirmation(text: str) -> bool:
     return bool(re.search(r"\b(?:si|sì|confermo|conferma|ok|va bene|procedi)\b", text.lower()))
+
+
+def _rejection(text: str) -> bool:
+    return bool(re.search(r"\b(?:no|non confermo|modifica|cambia)\b", text.lower()))
 
 
 def _extract_requirements(text: str, previous: dict) -> dict:
@@ -64,9 +68,11 @@ def _extract_requirements(text: str, previous: dict) -> dict:
     if participants is not None:
         requirements["participants"] = participants
     lowered = text.lower()
+    explicit_city = False
     for name, (country, city) in DESTINATIONS.items():
         if re.search(rf"\b{re.escape(name)}\b", lowered):
             requirements.update({"country": country, "destinationCity": city})
+            explicit_city = True
             break
     for name, code in AIRPORTS.items():
         if name in lowered:
@@ -80,9 +86,31 @@ def _extract_requirements(text: str, previous: dict) -> dict:
             if country in lowered:
                 requirements["country"] = country.title()
                 break
+    else:
+        country_aliases = {"spagna": "Spagna", "portogallo": "Portogallo", "francia": "Francia", "grecia": "Grecia"}
+        for country, normalized_country in country_aliases.items():
+            if country in lowered:
+                requirements["country"] = normalized_country
+                if not explicit_city:
+                    requirements.pop("destinationCity", None)
+                break
     if "travelMonth" not in requirements:
         requirements["travelMonth"] = normalize_month(text)
     return requirements
+
+
+def _merge_advisory_requirements(text: str, deterministic: dict, advisory: dict) -> dict:
+    """Merge optional LLM hints without allowing invented critical values."""
+    merged = {**advisory, **deterministic}
+    explicit_month = normalize_month(text)
+    if explicit_month:
+        merged["travelMonth"] = explicit_month
+    explicit_city = deterministic.get("destinationCity")
+    if not explicit_city and advisory.get("destinationCity"):
+        # A provider may infer a plausible city from a country. Keep the
+        # country-level request instead until the user names a city explicitly.
+        merged.pop("destinationCity", None)
+    return merged
 
 
 def _summary(requirements: dict) -> str:
@@ -172,7 +200,14 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             (conversation_id,),
         ).fetchall()
         history = [{"role": row[0], "content": row[1]} for row in reversed(history_rows)]
-        if state.get("phase") == "confirming" and _confirmation(message) and is_complete(requirements):
+        if state.get("phase") == "confirming" and _rejection(message):
+            state["phase"] = "collecting"
+            response = {
+                "reply": "Va bene, cosa vuoi modificare: destinazione, budget, date, durata, partecipanti o preferenze?",
+                "phase": state["phase"], "requirements": requirements,
+                "missing": missing_fields(requirements), "issues": validate_consistency(requirements),
+            }
+        elif state.get("phase") == "confirming" and _confirmation(message) and is_complete(requirements):
             reply = "Perfetto: i requisiti sono confermati. Avvio la generazione dell’itinerario."
             state["phase"] = "confirmed"
             response = {
@@ -188,7 +223,7 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             )
             # Deterministic values win over model suggestions when the user
             # explicitly supplied them in this turn.
-            requirements = {**llm_fields, **requirements}
+            requirements = _merge_advisory_requirements(message, requirements, llm_fields)
             state["requirements"] = requirements
             missing = missing_fields(requirements)
             issues = validate_consistency(requirements)
