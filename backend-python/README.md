@@ -32,6 +32,13 @@ Per aggiungere le attività demo mancanti senza cancellare dati applicativi:
 python -m scripts.extend_catalog
 ```
 
+Per reimpostare localmente la password di un account esistente senza scriverla
+nella shell history:
+
+```powershell
+python -m scripts.reset_password prova@lolno.it
+```
+
 ## Test
 
 ```powershell
