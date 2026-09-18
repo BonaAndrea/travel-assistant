@@ -85,7 +85,8 @@ async def http_error(_request: Request, exception: HTTPException) -> JSONRespons
 
 
 @app.exception_handler(Exception)
-async def unhandled_error(_request: Request, _exception: Exception) -> JSONResponse:
+async def unhandled_error(_request: Request, exception: Exception) -> JSONResponse:
+    logger.exception("unhandled request error", exc_info=exception)
     return JSONResponse({"error": "Errore interno del server"}, status_code=500)
 
 

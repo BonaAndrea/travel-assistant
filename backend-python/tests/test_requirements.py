@@ -77,3 +77,34 @@ def test_vision_is_opt_in(monkeypatch) -> None:
     result = asyncio.run(analyze_image(b"not-an-image", "image/png"))
 
     assert result == {"status": "skipped", "reason": "vision_disabled"}
+
+
+def test_vision_can_fallback_to_gemini(monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_ENABLED", "true")
+    monkeypatch.setenv("GEMINI_FREE_TIER_CONFIRMED", "true")
+    monkeypatch.setenv("GEMINI_VISION_ENABLED", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": '{"description":"mare","tags":["relax"]}'}]}}]}
+
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, *_args, **_kwargs):
+            return Response()
+
+    monkeypatch.setattr("app.vision.httpx.AsyncClient", Client)
+    result = asyncio.run(analyze_image(b"image", "image/png"))
+    assert result == {"status": "completed", "description": "mare", "tags": ["relax"]}
