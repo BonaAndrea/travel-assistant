@@ -118,18 +118,27 @@ async function resolveCatalogDestinationIssue(requirements) {
   };
 }
 
-async function inferDestinationCityFromMessage(message, requirements) {
-  if (requirements?.destinationCity || !prisma.destination?.findMany) return null;
+async function inferDestinationFromMessage(message) {
+  if (!prisma.destination?.findMany) return null;
   const normalizedMessage = normalizeLocation(message);
   if (!normalizedMessage) return null;
   const destinations = await prisma.destination.findMany({
-    select: { city: true },
+    select: { city: true, country: true },
     orderBy: { city: 'asc' },
   });
-  return destinations.find((destination) => {
-    const city = normalizeLocation(destination.city);
-    return city.length >= 4 && normalizedMessage.includes(city);
-  })?.city || null;
+  const matches = destinations.flatMap((destination) => [
+    { destination, value: destination.city, kind: 'city' },
+    { destination, value: destination.country, kind: 'country' },
+  ]).filter(({ value }) => {
+    const normalizedValue = normalizeLocation(value);
+    return normalizedValue.length >= 4 && normalizedMessage.includes(normalizedValue);
+  }).sort((left, right) => normalizeLocation(right.value).length - normalizeLocation(left.value).length);
+  const match = matches[0];
+  if (!match) return null;
+  return {
+    country: match.destination.country,
+    city: match.kind === 'city' ? match.destination.city : null,
+  };
 }
 
 async function normalizeDepartureAirportFromMessage(message, requirements) {
@@ -482,8 +491,29 @@ router.post('/conversations/:id/messages', createConversationLockMiddleware(), a
     }
   }
   const requirements = { ...state.requirements, ...normalizedFields };
-  const inferredDestinationCity = await inferDestinationCityFromMessage(message, requirements);
-  if (inferredDestinationCity) requirements.destinationCity = inferredDestinationCity;
+  const explicitDestination = await inferDestinationFromMessage(message);
+  const modelCountryWasMentioned = normalizedFields.country
+    && normalizeLocation(message).includes(normalizeLocation(normalizedFields.country));
+  if (explicitDestination) {
+    requirements.country = explicitDestination.country;
+    if (explicitDestination.city) requirements.destinationCity = explicitDestination.city;
+    else delete requirements.destinationCity;
+  } else if (!state.requirements.country) {
+    // Il modello può suggerire una destinazione per rendere naturale la risposta,
+    // ma una nazione/città non dichiarata dall'utente non è un requisito valido.
+    // Manteniamo invece una nazione sconosciuta solo quando è stata esplicitamente
+    // scritta dall'utente, così il catalogo può restituire un errore comprensibile.
+    if (!modelCountryWasMentioned) {
+      delete requirements.country;
+      delete requirements.destinationCity;
+    } else {
+      delete requirements.destinationCity;
+    }
+  } else if (!state.requirements.destinationCity) {
+    // Evita che il modello trasformi una nazione esplicita in una città arbitraria
+    // della stessa nazione (per esempio Spagna -> Nizza).
+    delete requirements.destinationCity;
+  }
   const normalizedDepartureAirport = await normalizeDepartureAirportFromMessage(message, requirements);
   if (normalizedDepartureAirport) requirements.departureAirport = normalizedDepartureAirport;
   if (!sameRequirements(state.requirements, requirements)) delete state.lastResult;
