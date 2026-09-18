@@ -86,7 +86,7 @@ async def enrich_requirements(history: list[dict], requirements: dict) -> tuple[
 
     async def gemini_call() -> tuple[dict, str | None]:
         contents = [{"role": "model" if item.get("role") == "assistant" else "user", "parts": [{"text": str(item.get("content", ""))}]} for item in messages if item.get("content")]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-lite')}:generateContent"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{os.getenv('GEMINI_MODEL', 'gemini-3.5-flash-lite')}:generateContent"
         async with httpx.AsyncClient(timeout=float(os.getenv("GEMINI_TIMEOUT_MS", "10000")) / 1000) as client:
             response = await client.post(url, params={"key": os.getenv("GEMINI_API_KEY")}, json={"contents": contents, "generationConfig": {"responseMimeType": "application/json"}})
             response.raise_for_status()

@@ -32,7 +32,7 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
             return {"status": "skipped", "reason": "vision_disabled"}
         return {"status": "skipped", "reason": "api_key_missing"}
     payload = {
-        "model": os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.6-27b"),
+                "model": os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.6-27b"),
         "temperature": 0,
         "response_format": {"type": "json_object"},
         "messages": [{"role": "user", "content": [
@@ -59,7 +59,7 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
 
     if gemini_enabled:
         try:
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-lite')}:generateContent"
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{os.getenv('GEMINI_MODEL', 'gemini-3.5-flash-lite')}:generateContent"
             gemini_payload = {"contents": [{"role": "user", "parts": [{"text": payload["messages"][0]["content"][0]["text"]}, {"inline_data": {"mime_type": mime_type, "data": base64.b64encode(data).decode()}}]}], "generationConfig": {"responseMimeType": "application/json"}}
             async with httpx.AsyncClient(timeout=float(os.getenv("GEMINI_TIMEOUT_MS", "10000")) / 1000) as client:
                 response = await client.post(gemini_url, params={"key": os.getenv("GEMINI_API_KEY")}, json=gemini_payload)

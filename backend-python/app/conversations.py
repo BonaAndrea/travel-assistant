@@ -327,7 +327,17 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             elif missing:
                 state["phase"] = "collecting"
                 labels = ", ".join(FIELD_LABELS[field] for field in missing)
-                reply = llm_reply or f"Mi mancano ancora {labels}. Puoi indicarmeli?"
+                # A provider reply may not know that the just-uploaded image
+                # was already resolved deterministically. Never let a generic
+                # "I cannot see the image" answer contradict extracted state.
+                llm_mentions_unresolved_destination = (
+                    bool(requirements.get("country"))
+                    and bool(llm_reply)
+                    and "destinazione" in llm_reply.casefold()
+                )
+                reply = (
+                    None if llm_mentions_unresolved_destination else llm_reply
+                ) or f"Mi mancano ancora {labels}. Puoi indicarmeli?"
             else:
                 state["phase"] = "confirming"
                 reply = _summary(requirements)
