@@ -47,6 +47,8 @@ ACTIVITIES = [
     ("Escursione naturalistica", "sport", "Attivita outdoor in paesaggi naturali vicino alla citta.", "sportivi, avventurosi", 45, 840, 960),
     ("Degustazione gastronomica locale", "gastronomia", "Percorso tra prodotti tipici e cucina locale.", "appassionati di cibo, coppie", 35, 720, 840),
     ("Passeggiata panoramica", "natura", "Passeggiata guidata tra punti panoramici e quartieri caratteristici.", "amanti delle passeggiate, famiglie", 18, 600, 720),
+    ("Laboratorio di cucina locale", "gastronomia", "Esperienza pratica per imparare ricette e sapori della tradizione.", "appassionati di cibo, coppie", 42, 780, 900),
+    ("Mercati e sapori della città", "gastronomia", "Itinerario tra mercati storici e specialità locali.", "amanti del cibo, curiosi", 22, 630, 750),
 ]
 
 
