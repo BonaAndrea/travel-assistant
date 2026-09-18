@@ -186,9 +186,10 @@ button.secondary:hover:not(:disabled){background:var(--color-rule);color:var(--c
 .auth-forms .backend-picker .extras-switch-track{width:42px;height:25px}
 @media (max-width:800px){.auth-forms{min-height:0}.auth-forms .backend-picker{padding-top:10px}}
 
-.auth-page>.backend-picker{justify-content:center;margin:14px auto 0;padding:0;font-size:.76rem}
+.auth-page{display:flex;flex-direction:column;min-height:calc(100vh - 100px)}
+.auth-page>.backend-picker{justify-content:center;margin-top:auto;margin-bottom:4px;padding:24px 0 8px;font-size:.76rem}
 .auth-page>.backend-picker .extras-switch{min-height:42px;padding:0 8px;font-size:.76rem}
-@media (max-width:800px){.auth-page>.backend-picker{margin-top:10px}}
+@media (max-width:800px){.auth-page{min-height:0}.auth-page>.backend-picker{margin-top:10px;padding:0}}
 
 /* Hallmark correction pass · contrast, hierarchy and responsive balance. */
 .auth-visual{min-height:480px}
