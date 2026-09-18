@@ -45,6 +45,8 @@ ACTIVITIES = [
     ("Tour della vita notturna", "nightlife", "Serata guidata tra locali e punti panoramici della citta.", "giovani, nightlife", 30, 1200, 1320),
     ("Museo di arte moderna", "cultura", "Visita a una collezione permanente di arte moderna.", "appassionati d'arte, famiglie", 15, 570, 690),
     ("Escursione naturalistica", "sport", "Attivita outdoor in paesaggi naturali vicino alla citta.", "sportivi, avventurosi", 45, 840, 960),
+    ("Degustazione gastronomica locale", "gastronomia", "Percorso tra prodotti tipici e cucina locale.", "appassionati di cibo, coppie", 35, 720, 840),
+    ("Passeggiata panoramica", "natura", "Passeggiata guidata tra punti panoramici e quartieri caratteristici.", "amanti delle passeggiate, famiglie", 18, 600, 720),
 ]
 
 

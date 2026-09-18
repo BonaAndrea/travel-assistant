@@ -42,6 +42,10 @@ def generate(
     origin = str(requirements.get("departureAirport", "")).upper()
     destination = str(requirements.get("destinationCity") or requirements.get("country", ""))
     preferences = [str(item).lower() for item in requirements.get("activityPreferences", [])]
+    category_preferences = [
+        {"buon cibo": "gastronomia", "passeggiate": "natura"}.get(item, item)
+        for item in preferences
+    ]
 
     with connect() as connection:
         progress(10, "Ricerca voli")
@@ -98,9 +102,8 @@ def generate(
         progress(35, "Ricerca hotel")
         hotel = connection.execute(
             'SELECT h."id", h."name", h."city" FROM "Hotel" h '
-            'JOIN "Destination" d ON d."id" = h."destinationId" '
-            'WHERE LOWER(h."city") = LOWER(%s) OR LOWER(d."country") = LOWER(%s) '
-            'ORDER BY h."name" LIMIT 1', (destination, destination),
+            'WHERE h."destinationId" = %s '
+            'ORDER BY h."name" LIMIT 1', (outbound[8],),
         ).fetchone()
         if not hotel:
             return {"error": "Non sono disponibili hotel nella destinazione richiesta.", "errorCode": "no_hotel"}
@@ -114,11 +117,12 @@ def generate(
 
         progress(60, "Ricerca attività")
         activities = []
+        used_activity_ids = set()
         retrieval_query = " ".join(preferences)
         for offset in range(nights):
             day = departure + timedelta(days=offset)
-            preference_clause = " OR ".join(["LOWER(a.\"category\") = %s"] * len(preferences)) or "TRUE"
-            params = [hotel[0], *preferences, day, day + timedelta(days=1)]
+            preference_clause = " OR ".join(["LOWER(a.\"category\") = %s"] * len(category_preferences)) or "TRUE"
+            params = [hotel[0], *category_preferences, day, day + timedelta(days=1)]
             activity_rows = connection.execute(
                 f'SELECT s."id", s."activityId", a."name", a."category", s."date", s."cost" FROM "ActivityAvailability" s '
                 f'JOIN "Activity" a ON a."id" = s."activityId" WHERE a."destinationId" = '
@@ -134,8 +138,10 @@ def generate(
                 if score is None:
                     score = relevance(retrieval_query, category=candidate[3], name=candidate[2])
                 scored.append((score, float(candidate[5]), candidate))
-            activity = max(scored, key=lambda item: (item[0], -item[1]))[2]
-            activities.append({"availabilityId": activity[0], "activityId": activity[1], "name": activity[2], "category": activity[3], "date": activity[4].isoformat(), "cost": activity[5] * participants})
+            unused = [item for item in scored if item[2][1] not in used_activity_ids]
+            activity = max(unused or scored, key=lambda item: (item[0], -item[1]))[2]
+            used_activity_ids.add(activity[1])
+            activities.append({"availabilityId": activity[0], "activityId": activity[1], "name": activity[2], "category": activity[3], "date": activity[4].isoformat(), "day": offset + 1, "cost": activity[5] * participants})
 
         progress(90, "Salvataggio proposta")
         flight_cost = (outbound[2] + inbound[2]) * participants
