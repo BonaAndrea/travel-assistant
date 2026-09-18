@@ -179,6 +179,13 @@ button.secondary:hover:not(:disabled){background:var(--color-rule);color:var(--c
 @media (min-width:768px) and (max-width:800px){body{padding-inline:var(--space-lg)}nav a:not(.brand-lockup){flex:0 1 auto}.history-layout,#bookings.booking-layout{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}}
 
+/* Login backend switch: quiet footer control, with Python as the active default. */
+.auth-forms{display:flex;flex-direction:column;min-height:590px}
+.auth-forms .backend-picker{justify-content:center;margin-top:auto;padding-top:16px}
+.auth-forms .backend-picker .backend-toggle{min-height:42px;padding:0 8px;font-size:.76rem}
+.auth-forms .backend-picker .extras-switch-track{width:42px;height:25px}
+@media (max-width:800px){.auth-forms{min-height:0}.auth-forms .backend-picker{padding-top:10px}}
+
 /* Hallmark correction pass · contrast, hierarchy and responsive balance. */
 .auth-visual{min-height:480px}
 .auth-visual h1{max-width:16ch;margin-top:var(--space-2xl);font-size:clamp(3rem,6vw,5.4rem);line-height:.92}

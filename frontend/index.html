@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Travel Assistant - Accedi</title>
-  <link rel="stylesheet" href="style.css?v=backend-toggle" />
+  <link rel="stylesheet" href="style.css?v=backend-toggle-v2" />
   <style>.auth-forms > h1 { display: none; }</style>
 </head>
 <body class="auth-page-body">
@@ -55,10 +55,10 @@
   <div class="backend-picker" aria-labelledby="backend-picker-title" aria-describedby="backend-picker-help">
     <span id="backend-picker-title" class="backend-picker-label">Backend</span>
     <label class="extras-switch backend-toggle" for="backend-choice-toggle">
-      <span class="backend-toggle-name">Python</span>
+      <span class="backend-toggle-name">Node.js</span>
       <input id="backend-choice-toggle" type="checkbox" role="switch" aria-describedby="backend-picker-help" />
       <span class="extras-switch-track" aria-hidden="true"><span></span></span>
-      <span class="backend-toggle-name">Node.js</span>
+      <span class="backend-toggle-name">Python</span>
     </label>
     <span id="backend-picker-help" class="sr-only">Python predefinito</span>
   </div>
@@ -72,9 +72,9 @@
 
     const backendToggle = document.getElementById('backend-choice-toggle');
     const backendPickerHelp = document.getElementById('backend-picker-help');
-    backendToggle.checked = getBackendChoice() === 'node';
+    backendToggle.checked = getBackendChoice() === 'python';
     function updateBackendChoice() {
-      const choice = backendToggle.checked ? 'node' : 'python';
+      const choice = backendToggle.checked ? 'python' : 'node';
       setBackendChoice(choice);
       backendPickerHelp.textContent = `${BACKENDS[choice].label}${choice === 'python' ? ' predefinito' : ''}`;
     }
