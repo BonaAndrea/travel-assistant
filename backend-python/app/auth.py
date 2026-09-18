@@ -41,9 +41,7 @@ def public_user(user: tuple[str, str, str]) -> dict[str, str]:
 
 
 def access_token(user_id: str) -> str:
-    # The legacy schema stores timestamps without timezone information.
-    # Compare using the same representation returned by psycopg.
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(UTC)
     return jwt.encode(
         {"sub": user_id, "typ": "access", "iat": now, "exp": now + timedelta(minutes=15)},
         get_settings().jwt_secret,
@@ -139,7 +137,9 @@ def refresh(response: Response, refresh_token: Annotated[str | None, Cookie()] =
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token mancante")
 
-    now = datetime.now(UTC)
+    # The legacy schema stores timestamps without timezone information.
+    # Compare using the same representation returned by psycopg.
+    now = datetime.now(UTC).replace(tzinfo=None)
     try:
         with connect() as connection:
             stored = connection.execute(
@@ -148,7 +148,8 @@ def refresh(response: Response, refresh_token: Annotated[str | None, Cookie()] =
                 'JOIN "User" u ON u."id" = r."userId" WHERE r."tokenHash" = %s',
                 (token_hash(refresh_token),),
             ).fetchone()
-            if not stored or stored[2] <= now:
+            expires_at = stored[2].replace(tzinfo=None) if stored and stored[2].tzinfo else (stored[2] if stored else None)
+            if not stored or expires_at <= now:
                 clear_refresh_cookie(response)
                 raise HTTPException(status_code=401, detail="Refresh token non valido o scaduto")
             if stored[3]:

@@ -122,7 +122,18 @@ def extract_duration(value: object) -> int | None:
 
 
 def extract_participants(value: object) -> int | None:
-    match = re.search(r"\b(\d{1,2})\s*(?:persone|partecipanti|adulti)\b", str(value or ""), re.I)
+    text = clean(value)
+    words = {"uno": 1, "una": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5, "sei": 6}
+    if text in words:
+        return words[text]
+    word_match = re.search(r"\b(?:siamo|siamo in|partecipanti?)\s+(uno|una|due|tre|quattro|cinque|sei)\b", text, re.I)
+    if word_match:
+        return words[word_match.group(1).lower()]
+    standalone = re.fullmatch(r"\d{1,2}", text)
+    if standalone:
+        participants = int(standalone.group(0))
+        return participants if participants > 0 else None
+    match = re.search(r"\b(\d{1,2})\s*(?:persone|partecipanti|adulti)\b", text, re.I)
     if not match:
         return None
     participants = int(match.group(1))

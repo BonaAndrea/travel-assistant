@@ -23,6 +23,9 @@ def test_extracts_italian_travel_requirements() -> None:
     assert extract_budget(text) == 1500
     assert extract_duration(text) == 14
     assert extract_participants(text) == 2
+    assert extract_participants("2") == 2
+    assert extract_participants("due") == 2
+    assert extract_participants("Siamo in due") == 2
 
 
 def test_chat_requirement_update_preserves_existing_fields() -> None:
