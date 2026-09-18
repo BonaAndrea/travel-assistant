@@ -26,6 +26,12 @@ python -m scripts.seed
 Il seed ricrea solo il catalogo demo e i relativi dati di disponibilità; non
 cancella utenti, conversazioni, itinerari o prenotazioni.
 
+Per aggiungere le attività demo mancanti senza cancellare dati applicativi:
+
+```powershell
+python -m scripts.extend_catalog
+```
+
 ## Test
 
 ```powershell

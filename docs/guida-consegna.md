@@ -24,6 +24,12 @@ uvicorn app.main:app --app-dir backend-python --port 4001
 Il database deve essere PostgreSQL. Le migrazioni versionate sono applicate
 all’avvio; il seed è destinato solo a database demo isolati.
 
+Per aggiornare solo il catalogo senza cancellare conversazioni o prenotazioni:
+
+```powershell
+docker compose exec backend-python python -m scripts.extend_catalog
+```
+
 ## Funzionalità consegnate
 
 La soluzione include autenticazione e refresh token, chat con memoria e
