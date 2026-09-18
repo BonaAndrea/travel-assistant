@@ -68,12 +68,17 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
             return {"status": "skipped", "reason": "low_confidence"}
         return {"status": "completed", "description": description or None, "tags": tags}
 
+    fallback_result: dict[str, Any] | None = None
+
     if groq_enabled:
         try:
             async with httpx.AsyncClient(timeout=float(os.getenv("GROQ_VISION_TIMEOUT_MS", "15000")) / 1000) as client:
                 response = await client.post(VISION_URL, headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}"}, json=payload)
                 response.raise_for_status()
-                return await parse(response.json()["choices"][0]["message"]["content"])
+                groq_result = await parse(response.json()["choices"][0]["message"]["content"])
+                if groq_result.get("status") == "completed":
+                    return groq_result
+                fallback_result = groq_result
         except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             pass
 
@@ -87,4 +92,4 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
                 return await parse(response.json()["candidates"][0]["content"]["parts"][0]["text"])
         except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             pass
-    return {"status": "skipped", "reason": "provider_unavailable"}
+    return fallback_result or {"status": "skipped", "reason": "provider_unavailable"}
