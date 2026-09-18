@@ -118,7 +118,7 @@ def generate(
         progress(60, "Ricerca attività")
         activities = []
         used_activity_ids = set()
-        retrieval_query = " ".join(preferences)
+        retrieval_query = " ".join(category_preferences)
         for offset in range(nights):
             day = departure + timedelta(days=offset)
             preference_clause = " OR ".join(["LOWER(a.\"category\") = %s"] * len(category_preferences)) or "TRUE"
