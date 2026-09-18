@@ -168,13 +168,15 @@ def _apply_catalog_locations(connection: object, text: str, requirements: dict) 
     lowered = text.casefold()
     destinations = connection.execute('SELECT "city", "country" FROM "Destination"').fetchall()
     for city, country in sorted(destinations, key=lambda item: len(str(item[0])), reverse=True):
-        if str(city).casefold() in lowered:
+        if re.search(rf"\b{re.escape(str(city).casefold())}\b", lowered):
             requirements.update({"country": country, "destinationCity": city})
             break
     airports = connection.execute('SELECT "iataCode", "city" FROM "Airport"').fetchall()
     departure_context = re.search(r"\b(?:da|partenza|parto|aeroporto)\b", lowered)
     for code, city in sorted(airports, key=lambda item: len(str(item[1])), reverse=True):
-        if "departureAirport" not in requirements and departure_context and (str(code).casefold() in lowered or str(city).casefold() in lowered):
+        city_match = re.search(rf"\b{re.escape(str(city).casefold())}\b", lowered)
+        code_match = re.search(rf"\b{re.escape(str(code).casefold())}\b", lowered)
+        if "departureAirport" not in requirements and departure_context and (code_match or city_match):
             requirements["departureAirport"] = code
             break
     return requirements

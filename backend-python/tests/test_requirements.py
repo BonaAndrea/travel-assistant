@@ -134,6 +134,27 @@ def test_stale_city_is_removed_when_country_changes_on_later_message() -> None:
     assert "destinationCity" not in updated
 
 
+def test_catalog_matching_does_not_read_nizza_inside_organizzare() -> None:
+    class Result:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __init__(self):
+            self.results = [Result([("Nizza", "Francia")]), Result([])]
+
+        def execute(self, _query):
+            return self.results.pop(0)
+
+    requirements = _apply_catalog_locations(
+        Connection(), "Vorrei organizzare un viaggio in Spagna", {"country": "Spagna"}
+    )
+    assert requirements == {"country": "Spagna"}
+
+
 def test_database_url_drops_prisma_schema_parameter() -> None:
     assert psycopg_url("postgresql://travel:travel@localhost:5432/travel_assistant?schema=public") == "postgresql://travel:travel@localhost:5432/travel_assistant"
 
