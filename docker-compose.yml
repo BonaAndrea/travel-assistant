@@ -19,6 +19,9 @@ services:
     build:
       context: .
       dockerfile: backend-python/Dockerfile
+    env_file:
+      - path: ./backend-python/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy

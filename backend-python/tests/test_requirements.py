@@ -26,6 +26,8 @@ def test_extracts_italian_travel_requirements() -> None:
     assert extract_participants("2") == 2
     assert extract_participants("due") == 2
     assert extract_participants("Siamo in due") == 2
+    assert extract_participants("siamo in 2") == 2
+    assert extract_participants("numero di partecipanti: 2") == 2
 
 
 def test_chat_requirement_update_preserves_existing_fields() -> None:
@@ -156,6 +158,18 @@ def test_catalog_matching_does_not_read_nizza_inside_organizzare() -> None:
         Connection(), "Vorrei organizzare un viaggio in Spagna", {"country": "Spagna"}
     )
     assert requirements == {"country": "Spagna"}
+
+
+def test_airport_change_to_milan_is_recognized() -> None:
+    requirements = _extract_requirements("Parto da Roma per Lisbona", {})
+    updated = _extract_requirements("Anzi, cambia l'aeroporto: partiamo da Milano", requirements)
+    assert updated["departureAirport"] == "MXP"
+
+
+def test_unknown_catalog_destination_is_detectable() -> None:
+    from app.conversations import _unknown_destination_requested
+
+    assert _unknown_destination_requested("Vorrei andare in una destinazione non presente nel catalogo", {})
 
 
 def test_database_url_drops_prisma_schema_parameter() -> None:

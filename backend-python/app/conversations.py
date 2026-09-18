@@ -36,7 +36,7 @@ DESTINATIONS = {
 }
 AIRPORTS = {
     "fco": "FCO", "roma fiumicino": "FCO", "fiumicino": "FCO", "roma": "FCO",
-    "mxp": "MXP", "milano malpensa": "MXP", "malpensa": "MXP",
+    "mxp": "MXP", "milano malpensa": "MXP", "malpensa": "MXP", "milano": "MXP",
     "blq": "BLQ", "bologna": "BLQ", "nap": "NAP", "napoli": "NAP",
 }
 ACTIVITIES = ("cultura", "sport", "relax", "nightlife", "vita notturna", "natura", "mare", "gastronomia", "buon cibo", "passeggiate")
@@ -182,6 +182,16 @@ def _apply_catalog_locations(connection: object, text: str, requirements: dict) 
     return requirements
 
 
+def _unknown_destination_requested(text: str, requirements: dict) -> bool:
+    if requirements.get("country"):
+        return False
+    lowered = text.casefold()
+    return bool(
+        re.search(r"destinazione\s+(?:non\s+)?(?:presente|disponibile|conosciuta)", lowered)
+        or re.search(r"destinazione\s+fuori\s+catalogo", lowered)
+    )
+
+
 @router.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(_user_id: UserId) -> dict[str, str]:
     # La creazione è transitoria: la riga viene
@@ -231,6 +241,16 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             (conversation_id,),
         ).fetchall()
         history = [{"role": row[0], "content": row[1]} for row in reversed(history_rows)]
+        image_rows = connection.execute(
+            'SELECT "description", "tags" FROM "PreferenceImage" '
+            'WHERE "conversationId" = %s AND "userId" = %s AND "analysisStatus" = \'completed\' '
+            'ORDER BY "createdAt" DESC LIMIT 5',
+            (conversation_id, user_id),
+        ).fetchall()
+        image_context_parts = []
+        for description, tags in image_rows:
+            image_context_parts.extend([str(description or ""), *[str(tag) for tag in (tags or [])]])
+        image_context = " ".join(image_context_parts)
         if state.get("phase") == "confirming" and _rejection(message):
             state["phase"] = "collecting"
             response = {
@@ -247,8 +267,29 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
                 "nextAction": {"type": "start_itinerary_generation", "method": "POST", "path": "/api/itinerary-jobs", "conversationId": conversation_id, "requiresIdempotencyKey": True},
             }
         else:
-            requirements = _extract_requirements(message, requirements)
-            requirements = _apply_catalog_locations(connection, message, requirements)
+            extraction_text = f"{message} {image_context}".strip()
+            requirements = _extract_requirements(extraction_text, requirements)
+            requirements = _apply_catalog_locations(connection, extraction_text, requirements)
+            if _unknown_destination_requested(message, requirements):
+                state["requirements"] = requirements
+                state["phase"] = "collecting"
+                response = {
+                    "reply": "Non riconosco la destinazione indicata nel catalogo locale. Indica una destinazione supportata, ad esempio Madrid, Barcellona, Valencia, Lisbona, Parigi o Nizza.",
+                    "phase": state["phase"],
+                    "requirements": requirements,
+                    "missing": missing_fields(requirements),
+                    "issues": [],
+                }
+                connection.execute(
+                    'INSERT INTO "Message" ("id", "conversationId", "role", "content", "createdAt") VALUES (%s, %s, %s, %s, NOW())',
+                    (str(uuid4()), conversation_id, "assistant", response["reply"]),
+                )
+                connection.execute(
+                    'UPDATE "Conversation" SET "state" = %s, "updatedAt" = NOW() WHERE "id" = %s',
+                    (Jsonb(state), conversation_id),
+                )
+                connection.commit()
+                return response
             llm_fields, llm_reply = await enrich_requirements(
                 history, requirements,
             )

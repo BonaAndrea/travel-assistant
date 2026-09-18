@@ -126,9 +126,13 @@ def extract_participants(value: object) -> int | None:
     words = {"uno": 1, "una": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5, "sei": 6}
     if text in words:
         return words[text]
-    word_match = re.search(r"\b(?:siamo|siamo in|partecipanti?)\s+(uno|una|due|tre|quattro|cinque|sei)\b", text, re.I)
+    word_match = re.search(r"\b(?:siamo(?:\s+in)?|partecipanti?)\s+(uno|una|due|tre|quattro|cinque|sei)\b", text, re.I)
     if word_match:
         return words[word_match.group(1).lower()]
+    context_match = re.search(r"\b(?:numero\s+di\s+partecipanti|partecipanti?|siamo(?:\s+in)?)\s*[:=]?\s*(\d{1,2})\b", text, re.I)
+    if context_match:
+        participants = int(context_match.group(1))
+        return participants if participants > 0 else None
     standalone = re.fullmatch(r"\d{1,2}", text)
     if standalone:
         participants = int(standalone.group(0))

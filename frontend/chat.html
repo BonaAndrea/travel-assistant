@@ -925,13 +925,17 @@
         if (job.status === 'completed') {
           const conversation = await api(`/chat/conversations/${conversationId}`);
           if (version !== generationVersion) return;
-          const result = conversation.state?.lastResult;
-          if (!result?.requirementsSnapshot || !requirementsMatch(result.requirementsSnapshot, conversation.state.requirements)
-            || !requirementsMatch(result, job.result)) {
+          // The worker writes the job row before the conversation state. Use
+          // the completed job payload during that short consistency window;
+          // otherwise the UI used to discard a valid result until reload.
+          const result = conversation.state?.lastResult || job.result;
+          const savedRequirements = conversation.state?.requirements || job.result?.requirementsSnapshot || currentRequirements;
+          if (!result?.requirementsSnapshot || !requirementsMatch(result.requirementsSnapshot, savedRequirements)
+            || (conversation.state?.lastResult && !requirementsMatch(result, job.result))) {
             clearGeneration();
             return;
           }
-          currentRequirements = conversation.state.requirements;
+          currentRequirements = savedRequirements;
           renderItinerary(result);
           return;
         }
