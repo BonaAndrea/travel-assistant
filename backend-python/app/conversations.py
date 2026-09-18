@@ -29,6 +29,7 @@ DESTINATIONS = {
     "barcellona": ("Spagna", "Barcellona"), "barcelona": ("Spagna", "Barcellona"),
     "madrid": ("Spagna", "Madrid"), "lisbona": ("Portogallo", "Lisbona"),
     "lisbon": ("Portogallo", "Lisbona"), "parigi": ("Francia", "Parigi"),
+    "nizza": ("Francia", "Nizza"), "nice": ("Francia", "Nizza"),
     "paris": ("Francia", "Parigi"), "atene": ("Grecia", "Atene"),
     "athens": ("Grecia", "Atene"), "praga": ("Repubblica Ceca", "Praga"),
     "prague": ("Repubblica Ceca", "Praga"),
@@ -113,7 +114,17 @@ def _extract_requirements(text: str, previous: dict) -> dict:
                     requirements.pop("destinationCity", None)
                 break
     if "travelMonth" not in requirements:
-        requirements["travelMonth"] = normalize_month(text)
+        month = normalize_month(text)
+        if month:
+            requirements["travelMonth"] = month
+    destination = requirements.get("destinationCity")
+    if destination and requirements.get("country"):
+        known_destination = next(
+            (country for city_country, city in DESTINATIONS.values() if city.casefold() == str(destination).casefold() for country in (city_country,)),
+            None,
+        )
+        if known_destination and known_destination.casefold() != str(requirements["country"]).casefold():
+            requirements.pop("destinationCity", None)
     return requirements
 
 

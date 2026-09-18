@@ -127,6 +127,13 @@ def test_follow_up_return_date_updates_existing_trip() -> None:
     assert updated["durationDays"] == 6
 
 
+def test_stale_city_is_removed_when_country_changes_on_later_message() -> None:
+    requirements = {"country": "Spagna", "destinationCity": "Nizza"}
+    updated = _extract_requirements("Ci interessano cultura e passeggiate", requirements)
+    assert updated["country"] == "Spagna"
+    assert "destinationCity" not in updated
+
+
 def test_database_url_drops_prisma_schema_parameter() -> None:
     assert psycopg_url("postgresql://travel:travel@localhost:5432/travel_assistant?schema=public") == "postgresql://travel:travel@localhost:5432/travel_assistant"
 
