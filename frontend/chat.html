@@ -1028,7 +1028,7 @@
           ${option.compromises && option.compromises.length ? `<p><strong>Compromessi applicati:</strong> ${option.compromises.map(escapeHtml).join(' ')}</p>` : ''}
           <p><strong>Volo di andata:</strong> ${escapeHtml(option.flights.outbound.originAirport.iataCode)} → ${escapeHtml(option.flights.outbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.outbound.date).toLocaleDateString('it-IT'))}</p>
           <p><strong>Volo di ritorno:</strong> ${escapeHtml(option.flights.inbound.originAirport.iataCode)} → ${escapeHtml(option.flights.inbound.destinationAirport.iataCode)}, ${escapeHtml(new Date(option.flights.inbound.date).toLocaleDateString('it-IT'))}</p>
-          <p><strong>Hotel:</strong> ${escapeHtml(option.hotel.hotel.name)} (${escapeHtml(option.hotel.nights.length)} notti)</p>
+          <p><strong>Hotel:</strong> ${escapeHtml(option.hotel?.name || 'Hotel selezionato')} (${escapeHtml(option.hotel?.nights?.length || 0)} notti)</p>
               <p><strong>Attività (${option.activities.length}):</strong>${option.activities.length === 0 ? ' Nessuna attività disponibile entro i vincoli di budget/capacità per queste date.' : ''}</p>
           <ul class="activity-list">${option.activities.map(a => `<li class="activity-item">${mediaMarkup(a.media, 'activity-media')}<span>Giorno ${escapeHtml(a.day)} (${escapeHtml(a.date)}): ${escapeHtml(a.name)} - ${Number(a.cost || 0).toFixed(2)}€</span></li>`).join('')}</ul>
           <p><strong>Costo totale: ${option.totalCost.toFixed(2)}€</strong> <small class="cost-breakdown">(voli: ${option.breakdown.flightCost.toFixed(2)}€, hotel: ${option.breakdown.hotelCost.toFixed(2)}€, attività: ${option.breakdown.activityCost.toFixed(2)}€)</small></p>
@@ -1070,7 +1070,7 @@
 
         btn.addEventListener('click', async () => {
           if (bookingInFlight || bookingAttempt?.confirmed) return;
-          const destination = option.flights?.outbound?.destinationAirport?.iataCode || option.hotel?.hotel?.name || 'selezionata';
+          const destination = option.flights?.outbound?.destinationAirport?.iataCode || option.hotel?.name || 'selezionata';
           const total = Number(option.totalCost || 0).toFixed(2);
           if (!confirm(`Confermi la prenotazione per ${destination}, totale ${total} €? Prima della conferma verificheremo nuovamente prezzo e disponibilità.`)) return;
           bookingInFlight = true;
