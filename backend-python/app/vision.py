@@ -7,6 +7,18 @@ import httpx
 
 
 VISION_URL = "https://api.groq.com/openai/v1/chat/completions"
+VISION_INSTRUCTION = (
+    "Analizza questa immagine per un assistente di viaggio. "
+    "Rispondi esclusivamente con JSON valido usando le chiavi "
+    "description, tags e confidence. confidence deve essere un numero tra 0 e 1. "
+    "Se riconosci un monumento o un luogo famoso, indica nella description il "
+    "nome preciso e, solo se realmente supportati dall'immagine, città e paese. "
+    "Non inventare una città o una destinazione: se non sei sicuro, usa confidence "
+    "inferiore a 0.75 e descrivi soltanto gli elementi visibili. "
+    "Non trasformare un'ipotesi in un requisito di viaggio e non dedurre dati personali. "
+    "Usa al massimo 8 tag brevi e pertinenti."
+)
+MIN_CONFIDENCE = 0.75
 
 
 def _json_payload(value: str) -> dict[str, Any]:
@@ -36,7 +48,7 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
         "temperature": 0,
         "response_format": {"type": "json_object"},
         "messages": [{"role": "user", "content": [
-            {"type": "text", "text": "Descrivi questa immagine per suggerire un viaggio. Rispondi JSON con description e tags (massimo 8 tag brevi). Non dedurre dati personali o requisiti certi."},
+            {"type": "text", "text": VISION_INSTRUCTION},
             {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64.b64encode(data).decode()}"}},
         ]}],
     }
@@ -44,8 +56,16 @@ async def analyze_image(data: bytes, mime_type: str) -> dict[str, Any]:
         parsed = _json_payload(content)
         description = str(parsed.get("description", "")).strip()[:2000]
         tags = [str(tag).strip().lower()[:64] for tag in parsed.get("tags", []) if str(tag).strip()][:8]
+        try:
+            confidence = float(parsed.get("confidence", 0))
+        except (TypeError, ValueError):
+            confidence = 0
+        if not 0 <= confidence <= 1:
+            confidence = 0
         if not description and not tags:
             return {"status": "skipped", "reason": "invalid_provider_output"}
+        if confidence < MIN_CONFIDENCE:
+            return {"status": "skipped", "reason": "low_confidence"}
         return {"status": "completed", "description": description or None, "tags": tags}
 
     if groq_enabled:
