@@ -142,6 +142,25 @@ def _merge_advisory_requirements(text: str, deterministic: dict, advisory: dict)
     return merged
 
 
+def _usable_natural_reply(reply: str | None, requirements: dict, missing: list[str]) -> str | None:
+    """Accept natural phrasing only when it does not contradict state."""
+    if not reply:
+        return None
+    normalized = reply.strip()
+    if not normalized or len(normalized) > 700:
+        return None
+    lowered = normalized.casefold()
+    if requirements.get("country") and "destinazione" in lowered and any(
+        phrase in lowered for phrase in ("non riconosco", "non conosco", "non riesco", "manca")
+    ):
+        return None
+    if "partecipanti" in missing and re.search(r"\b\d+\s+partecipanti\b", lowered):
+        return None
+    if "budget" in missing and re.search(r"\b\d+(?:[.,]\d+)?\s*€", lowered):
+        return None
+    return normalized
+
+
 def _summary(requirements: dict) -> str:
     destination = requirements.get("destinationCity") or requirements.get("country")
     period = requirements.get("outboundDate")
@@ -327,20 +346,11 @@ async def send_message(conversation_id: str, payload: dict, user_id: UserId) -> 
             elif missing:
                 state["phase"] = "collecting"
                 labels = ", ".join(FIELD_LABELS[field] for field in missing)
-                # A provider reply may not know that the just-uploaded image
-                # was already resolved deterministically. Never let a generic
-                # "I cannot see the image" answer contradict extracted state.
-                llm_mentions_unresolved_destination = (
-                    bool(requirements.get("country"))
-                    and bool(llm_reply)
-                    and "destinazione" in llm_reply.casefold()
-                )
-                reply = (
-                    None if llm_mentions_unresolved_destination else llm_reply
-                ) or f"Mi mancano ancora {labels}. Puoi indicarmeli?"
+                reply = _usable_natural_reply(llm_reply, requirements, missing)
+                reply = reply or f"Mi mancano ancora {labels}. Puoi indicarmeli?"
             else:
                 state["phase"] = "confirming"
-                reply = _summary(requirements)
+                reply = _usable_natural_reply(llm_reply, requirements, []) or _summary(requirements)
             response = {"reply": reply, "phase": state["phase"], "requirements": requirements, "missing": missing, "issues": issues}
         connection.execute(
             'INSERT INTO "Message" ("id", "conversationId", "role", "content", "createdAt") VALUES (%s, %s, %s, %s, NOW())',

@@ -48,7 +48,12 @@ async def enrich_requirements(history: list[dict], requirements: dict) -> tuple[
             "fields può contenere solo country, destinationCity, departureAirport, "
             "activityPreferences, travelMonth, durationDays, participants, budget. "
             "Inserisci in fields solo valori dichiarati esplicitamente dall'utente; "
-            "non inventare dati. reply è una breve risposta in italiano."
+            "non inventare dati e non correggere i valori già presenti nei requisiti. "
+            "reply deve essere naturale, empatica e breve: riconosci ciò che l'utente "
+            "ha già indicato e chiedi solo i requisiti ancora mancanti. Se tutti i "
+            "requisiti sono completi, ricapitolali in modo chiaro e chiedi conferma. "
+            "Non dire di non vedere un'immagine se i requisiti contengono già una "
+            "destinazione ricavata dall'analisi vision."
         ),
     }
     messages = [prompt, *history[-12:]]

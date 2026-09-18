@@ -10,7 +10,7 @@ from app.domain.requirements import (
     normalize_month,
     extract_single_date,
 )
-from app.conversations import _apply_catalog_locations, _extract_requirements, _merge_advisory_requirements
+from app.conversations import _apply_catalog_locations, _extract_requirements, _merge_advisory_requirements, _usable_natural_reply
 from app.database import psycopg_url
 from app.vision import analyze_image
 
@@ -170,6 +170,11 @@ def test_unknown_catalog_destination_is_detectable() -> None:
     from app.conversations import _unknown_destination_requested
 
     assert _unknown_destination_requested("Vorrei andare in una destinazione non presente nel catalogo", {})
+
+
+def test_natural_reply_fallback_does_not_contradict_deterministic_state() -> None:
+    assert _usable_natural_reply("Non riesco a vedere la destinazione", {"country": "Spagna"}, ["budget"]) is None
+    assert _usable_natural_reply("Perfetto, ho capito il tuo viaggio!", {"country": "Spagna"}, ["budget"]) == "Perfetto, ho capito il tuo viaggio!"
 
 
 def test_database_url_drops_prisma_schema_parameter() -> None:
