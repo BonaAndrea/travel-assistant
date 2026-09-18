@@ -13,6 +13,8 @@
     <section id="share-result" class="card" aria-live="polite">Caricamento…</section>
   </main>
   <script type="module">
+    import { api } from './api.js';
+
     const target = document.getElementById('share-result');
     const token = new URLSearchParams(location.search).get('token');
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -20,9 +22,7 @@
     }[char]));
     try {
       if (!token) throw Error('Link non valido');
-      const response = await fetch(`/api/share/public/${encodeURIComponent(token)}`);
-      if (!response.ok) throw Error('Link non disponibile');
-      const data = await response.json();
+      const data = await api(`/share/public/${encodeURIComponent(token)}`);
       const details = data.details || {};
       const outbound = details.flights?.outbound;
       const inbound = details.flights?.inbound;

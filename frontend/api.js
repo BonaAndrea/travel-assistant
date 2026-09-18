@@ -1,4 +1,36 @@
-const API_BASE = 'http://localhost:4001/api';
+const BACKEND_CHOICE_KEY = 'travel-backend-choice';
+const BACKEND_URLS = {
+  node: '__NODE_API_URL__',
+  python: '__PYTHON_API_URL__',
+};
+
+function configuredUrl(value, fallback) {
+  return value && !value.startsWith('__') ? value : fallback;
+}
+
+export const BACKENDS = {
+  node: { label: 'Node.js', url: configuredUrl(BACKEND_URLS.node, 'http://localhost:4000/api') },
+  python: { label: 'Python', url: configuredUrl(BACKEND_URLS.python, 'http://localhost:4001/api') },
+};
+
+export function getBackendChoice() {
+  const choice = localStorage.getItem(BACKEND_CHOICE_KEY);
+  return BACKENDS[choice] ? choice : 'python';
+}
+
+export function setBackendChoice(choice) {
+  if (!BACKENDS[choice]) throw new Error('Backend non supportato');
+  const previous = getBackendChoice();
+  if (previous !== choice) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('activeGenerationJob');
+  }
+  localStorage.setItem(BACKEND_CHOICE_KEY, choice);
+}
+
+function apiBase() {
+  return BACKENDS[getBackendChoice()].url;
+}
 
 function getToken() {
   return localStorage.getItem('token');
@@ -24,7 +56,7 @@ function expireSession() {
 }
 
 async function refreshAccessToken() {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
+  const res = await fetch(`${apiBase()}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -42,7 +74,7 @@ export async function api(path, { method = 'GET', body, retry = true } = {}) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers,
     credentials: 'include',
@@ -69,7 +101,7 @@ export async function apiFormData(path, { file, field = 'image', retry = true } 
   if (token) headers.Authorization = `Bearer ${token}`;
   const formData = new FormData();
   formData.append(field, file);
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method: 'POST', headers, credentials: 'include', body: formData,
   });
   if (res.status === 401 && retry && await refreshAccessToken()) {
@@ -90,7 +122,7 @@ export function requireLogin() {
 }
 
 export function logout() {
-  fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+  fetch(`${apiBase()}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
   localStorage.removeItem('token');
   window.location.href = 'index.html';
 }

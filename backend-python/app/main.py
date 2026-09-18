@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+import os
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,6 +23,13 @@ from .metrics import increment, observe, metrics_endpoint, request_started
 
 settings = get_settings()
 logger = logging.getLogger("travel-assistant-python")
+frontend_origin = os.getenv("FRONTEND_ORIGIN")
+allowed_origins = [
+    "http://localhost:8080", "http://localhost:8081",
+    "http://127.0.0.1:8080", "http://127.0.0.1:8081",
+]
+if frontend_origin:
+    allowed_origins.append(frontend_origin.rstrip("/"))
 
 
 @asynccontextmanager
@@ -42,7 +50,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:8081", "http://127.0.0.1:8080", "http://127.0.0.1:8081"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

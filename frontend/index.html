@@ -30,6 +30,15 @@
     <button id="show-register" class="auth-mode-btn" type="button" aria-pressed="false" aria-controls="reg-form">Registrati</button>
   </div>
 
+  <div class="backend-picker card" aria-labelledby="backend-picker-title">
+    <label id="backend-picker-title" for="backend-choice">Backend della demo</label>
+    <select id="backend-choice">
+      <option value="python">Python</option>
+      <option value="node">Node.js</option>
+    </select>
+    <p class="muted">Scegli quale implementazione usare. La scelta viene applicata al login e alle richieste successive.</p>
+  </div>
+
   <form id="login-form" class="card" novalidate aria-labelledby="login-title">
     <h2 id="login-title">Accedi</h2>
     <label for="login-email">Email</label>
@@ -57,7 +66,14 @@
   </main>
 
   <script type="module">
-    import { api } from './api.js';
+    import { api, BACKENDS, getBackendChoice, setBackendChoice } from './api.js';
+
+    const backendChoice = document.getElementById('backend-choice');
+    backendChoice.value = getBackendChoice();
+    for (const option of backendChoice.options) {
+      option.textContent = BACKENDS[option.value].label;
+    }
+    backendChoice.addEventListener('change', () => setBackendChoice(backendChoice.value));
 
     function setPending(form, pending) {
       form.querySelector('button').disabled = pending;

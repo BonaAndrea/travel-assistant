@@ -1,0 +1,12 @@
+.git
+.gitignore
+.pytest_cache
+**/__pycache__
+**/.pytest_cache
+backend-python/.venv
+backend-python/.env
+backend-python/uploads
+frontend/node_modules
+node_modules
+coverage
+*.log
