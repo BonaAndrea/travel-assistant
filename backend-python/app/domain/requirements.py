@@ -88,6 +88,20 @@ def extract_dates(value: object, reference: date | None = None) -> tuple[date, d
     return (departure, arrival) if departure and arrival else None
 
 
+def extract_single_date(value: object, reference: date | None = None) -> date | None:
+    """Extract one day/month value for follow-up corrections such as return dates."""
+    text = clean(value)
+    today = reference or date.today()
+    month_pattern = "|".join((*MONTHS, *MONTH_ALIASES))
+    named = re.search(rf"(\d{{1,2}})\s+({month_pattern})(?:\s+(20\d{{2}}))?", text)
+    if named:
+        return _parse_day_month(named.group(1), named.group(2), int(named.group(3) or today.year))
+    numeric = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](20\d{2}))?\b", text)
+    if numeric and 1 <= int(numeric.group(2)) <= 12:
+        return _parse_day_month(numeric.group(1), MONTHS[int(numeric.group(2)) - 1], int(numeric.group(3) or today.year))
+    return None
+
+
 def extract_budget(value: object) -> float | None:
     text = str(value or "").replace(".", "").replace(",", ".")
     match = re.search(r"(?:budget|spesa|spendere|costo)[^0-9]{0,20}(\d+(?:\.\d{1,2})?)", text, re.I)

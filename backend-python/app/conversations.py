@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import date, datetime, UTC, timedelta
 import re
 from pathlib import Path
 from typing import Annotated
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from .database import connect
 from .domain.requirements import (
-    extract_budget, extract_dates, extract_duration, extract_participants,
+    extract_budget, extract_dates, extract_duration, extract_participants, extract_single_date,
     is_complete, missing_fields, normalize_month, validate_consistency,
 )
 from .security import current_user_id
@@ -52,7 +52,11 @@ def _rejection(text: str) -> bool:
 def _extract_requirements(text: str, previous: dict) -> dict:
     requirements = dict(previous)
     budget = extract_budget(text)
-    dates = extract_dates(text)
+    year_match = re.search(r"\b(20\d{2})\b", text)
+    if year_match:
+        requirements["travelYear"] = int(year_match.group(1))
+    reference = date(int(requirements.get("travelYear", date.today().year)), 1, 1)
+    dates = extract_dates(text, reference=reference)
     duration = extract_duration(text)
     participants = extract_participants(text)
     if budget is not None:
@@ -65,6 +69,20 @@ def _extract_requirements(text: str, previous: dict) -> dict:
         })
     elif duration is not None:
         requirements["durationDays"] = duration
+    else:
+        single_date = extract_single_date(text, reference=reference)
+        if single_date and re.search(r"\b(?:ritorno|rientro|rientrare|tornare|fino)\b|\b\d{1,2}[/-]\d{1,2}\b", lowered := text.lower()):
+            if requirements.get("outboundDate"):
+                requirements["returnDate"] = single_date.isoformat()
+                departure = date.fromisoformat(str(requirements["outboundDate"])[:10])
+                requirements["durationDays"] = (single_date - departure).days + 1
+                requirements["travelMonth"] = normalize_month(single_date.strftime("%B"))
+            elif requirements.get("durationDays"):
+                departure = single_date - timedelta(days=int(requirements["durationDays"]) - 1)
+                requirements.update({
+                    "outboundDate": departure.isoformat(), "returnDate": single_date.isoformat(),
+                    "travelMonth": normalize_month(departure.strftime("%B")),
+                })
     if participants is not None:
         requirements["participants"] = participants
     lowered = text.lower()

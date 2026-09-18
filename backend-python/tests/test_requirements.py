@@ -8,6 +8,7 @@ from app.domain.requirements import (
     extract_participants,
     is_complete,
     normalize_month,
+    extract_single_date,
 )
 from app.conversations import _apply_catalog_locations, _extract_requirements, _merge_advisory_requirements
 from app.database import psycopg_url
@@ -109,6 +110,21 @@ def test_country_update_removes_stale_city_and_keeps_food_walks_preferences() ->
     assert "destinationCity" not in updated
     assert "buon cibo" in updated["activityPreferences"]
     assert "passeggiate" in updated["activityPreferences"]
+
+
+def test_follow_up_dates_keep_the_declared_year() -> None:
+    requirements = _extract_requirements("5 giorni a giugno 2027", {})
+    updated = _extract_requirements("da 1 giugno a 6 giugno", requirements)
+    assert updated["outboundDate"] == "2027-06-01"
+    assert updated["returnDate"] == "2027-06-06"
+    assert updated["durationDays"] == 6
+
+
+def test_follow_up_return_date_updates_existing_trip() -> None:
+    requirements = _extract_requirements("da 1 giugno a 5 giugno 2027", {})
+    updated = _extract_requirements("Ritorno il 6 giugno", requirements)
+    assert updated["returnDate"] == "2027-06-06"
+    assert updated["durationDays"] == 6
 
 
 def test_database_url_drops_prisma_schema_parameter() -> None:
